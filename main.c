@@ -17,6 +17,7 @@ int main()
         ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*3)
     );
 
+
     /* let first investor add third investor */
     Account investor3 = register_member(investor1, "Investor 3",
         ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2)
@@ -30,6 +31,14 @@ int main()
     /* let second investor add fifth investor */
     Account investor5 = register_member(investor2, "Investor 5",
         ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2.1)
+    );
+
+    /* let brocker add other invetors to make third leg */
+    Account investor6 = register_member(brocker1, "Investor 6",
+        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*1.46)
+    );
+    Account investor7 = register_member(brocker1, "Investor 7",
+        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2.62)
     );
 
 
@@ -128,9 +137,19 @@ int main()
     /* now auto-refill for all investments for one entire season/year */
     for(int i=0; i<12;++i) auto_refill(NULL, monhtly_auto_refill_percentages[i]);
 
-    structure_details(NULL);
 
     printf("SYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
+    
+    calculate_tvc(NULL);
+
+    Account investor8 = register_member(brocker1, "Investor 8",
+        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*1.82)
+    );
+    calculate_tvc(brocker1);
+
+
+    structure_details(brocker1);
+
     
     return 0;
 }

@@ -4,6 +4,11 @@
     Logic: all explained in the proposal document (see bukman or richard about this)
     Owner: JERM Technology
     License: Private; all rights reserved by JERM technology
+
+    RECURSION DESIGN: i always use iteration over recurssion due to the function-call overhead issue
+                      in recurssion. a project like this that may perform millions of recursice-like
+                      calculations would get considerably slow if recursion was used instead of 
+                      iteration
 */
 
 /* library inclusion */
@@ -98,6 +103,7 @@ Account register_member(Account uplink, String names, Amount amount);
 
 void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names);
 void auto_refill(Account account, float percentages[][2]);
+void calculate_tvc(Account account);
 
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
@@ -522,8 +528,10 @@ void auto_refill(Account account, float percentages[][2])
        calculate auto-refill for only that account's investments 
     */
 
-    /* this function is called once every month (on an agreed date)
-    */
+    /* this function is called once every month (on an agreed date) */
+
+    /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
+       make the function recursive as this becomes CPU expensive in the long run */
 
     time_t t; time(&t);
     struct tm *today = localtime(&t);
@@ -685,6 +693,194 @@ void auto_refill(Account account, float percentages[][2])
            } 
         }
 
+
+        acc_p = acc_p->next;
+    }
+}
+
+void calculate_tvc(Account account)
+{
+    /* this function should be called only once a month on the agreed day */
+
+    /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
+       make the function recursive as this becomes CPU expensive in the long run */
+
+    time_t t; time(&t);
+    struct tm *today = localtime(&t);
+
+    if(today->tm_mday!=PAYMENT_DAY){warn(15); return;}
+
+    Amount lower_leg_volume, actual_lower_leg_volume, returns;
+    int i, j, buff_length; /* i is used for getting the lower_leg_volume, while j is used to
+                              get the TVC % comission based on the account PV
+                           */
+
+    Commission new_commission;
+
+    char returns_str[16], llv_str[32], allv_str[32];
+
+    if(account!=NULL)
+    {
+        if(
+            /* since logic operators are processed left to right, this code won't 
+               break when account->children->next==NULL or when account->children->next->next==NULL!
+            */
+           (account->children!=NULL) && 
+           (account->children->next!=NULL) && 
+           (account->children->next->next!=NULL))
+        {
+            lower_leg_volume = account->leg_volumes[0];
+            i = 1;
+            for(; i<3; ++i)
+                lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
+                    account->leg_volumes[i] : lower_leg_volume ;
+
+            actual_lower_leg_volume = lower_leg_volume - account->TVC_level;
+            account->TVC_level = lower_leg_volume;
+            
+            j = 0;
+            for(;TVC[j][1];++j)
+            {
+                if(account->pv < TVC[i+1][1]) break;
+            }
+            
+            j = TVC[j][1] ? j : --j;
+            
+            /* returns should not be more than PV made in the first month!!!! */
+            returns = TVC[j][1]*.01*actual_lower_leg_volume;
+            
+            if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
+            {
+                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        if(new_commission==NULL) memerror();
+
+                        new_commission->reason = NULL;
+                        new_commission->amount = returns;
+
+                        new_commission->next = NULL;
+                        new_commission->prev = NULL;
+
+                        if(account->commissions==NULL)
+                        {
+                            account->commissions = new_commission;
+                            account->last_commission = account->commissions;
+                        }
+                        else
+                        {
+                            new_commission->prev = account->last_commission;
+                            account->last_commission->next = new_commission;
+                            account->last_commission = new_commission;
+                        }
+
+                        sprintf(returns_str," ($%.2f)",returns);
+                        sprintf(llv_str," %.2f points",lower_leg_volume);
+                        sprintf(allv_str," %.2f points",actual_lower_leg_volume);
+                        String reason_strings[] = {"TVC of", returns_str, ". LLV =",
+                            llv_str, ", ALLV =", allv_str,"\0"};
+                        length_of_all_strings(reason_strings, &buff_length);
+
+                        /* create a new array to hold this commission reason (you cant just assign a local char[] to
+                           new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
+                           EXITS, THE POINTER WILL BE ANONYMOUS!)*/
+                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        join_strings(new_commission->reason,reason_strings);
+
+                        account->available_balance += returns;
+                        account->total_returns += returns;
+                        
+                        CUMULATIVE_COMMISSIONS += returns;
+                        COMMISSIONS += returns;
+            
+            }
+        }
+        
+        /* else{printf("not TVC for <%s>...",account->names); warn(14);} */
+        
+        return;
+    }
+
+    AccountPointer acc_p = HEAD;
+    Account acc;
+    acc_p = acc_p==NULL ? acc_p : acc_p->next;
+
+    while(acc_p!=NULL)
+    {
+        acc = acc_p->account;
+
+        if(
+            /* since logic operators are processed left to right, this code won't 
+               break when account->children->next==NULL or when account->children->next->next==NULL!
+            */
+           (acc->children!=NULL) && 
+           (acc->children->next!=NULL) && 
+           (acc->children->next->next!=NULL))
+        {
+            lower_leg_volume = acc->leg_volumes[0];
+            i = 1;
+            for(; i<3; ++i)
+                lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
+                    acc->leg_volumes[i] : lower_leg_volume ;
+
+            actual_lower_leg_volume = lower_leg_volume - acc->TVC_level;
+            acc->TVC_level = lower_leg_volume;
+            
+            j = 0;
+            for(;TVC[j][1];++j)
+            {
+                if(acc->pv < TVC[i+1][1]) break;
+            }
+            
+            j = TVC[j][1] ? j : --j;
+            
+            /* returns should not be more than PV made in the first month!!!! */
+            returns = TVC[j][1]*.01*actual_lower_leg_volume;
+            
+            if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
+            {
+                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        if(new_commission==NULL) memerror();
+
+                        new_commission->reason = NULL;
+                        new_commission->amount = returns;
+
+                        new_commission->next = NULL;
+                        new_commission->prev = NULL;
+
+                        if(acc->commissions==NULL)
+                        {
+                            acc->commissions = new_commission;
+                            acc->last_commission = acc->commissions;
+                        }
+                        else
+                        {
+                            new_commission->prev = acc->last_commission;
+                            acc->last_commission->next = new_commission;
+                            acc->last_commission = new_commission;
+                        }
+
+                        sprintf(returns_str," ($%.2f)",returns);
+                        sprintf(llv_str," %.2f points",lower_leg_volume);
+                        sprintf(allv_str," %.2f points",actual_lower_leg_volume);
+                        String reason_strings[] = {"TVC of", returns_str, ". LLV =",
+                            llv_str, ", ALLV =", allv_str,"\0"};
+                        length_of_all_strings(reason_strings, &buff_length);
+
+                        /* create a new array to hold this commission reason (you cant just assign a local char[] to
+                           new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
+                           EXITS, THE POINTER WILL BE ANONYMOUS!)*/
+                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        join_strings(new_commission->reason,reason_strings);
+
+                        acc->available_balance += returns;
+                        acc->total_returns += returns;
+                        
+                        CUMULATIVE_COMMISSIONS += returns;
+                        COMMISSIONS += returns;
+            
+            }
+        }
 
         acc_p = acc_p->next;
     }
