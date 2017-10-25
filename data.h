@@ -1,5 +1,7 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
+#define TBB_MAX_GENERATIONS 7
+#define PAYMENT_DAY 25 /* any day from 1'st to 28'th (29+ may be absent in some months...)*/
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40 /* $ */
@@ -20,6 +22,10 @@ char *ERRORS[] = {
     /*7*/ "CANT INCREMENT PV FOR NULL ACCOUNT",
     /*8*/ "CANT GIVE ANY COMMISSIONS FOR 0 POINTS",
     /*9*/ "AMOUNT EXEEDS MAXIMUM INVESTABLE AMOUNT. INQUIRE WITH MANAGEMENT ABOUT THIS!",
+    /*10*/ "INSUFFICIENT FUNDS. REDEEM OPERATION DUMPED",
+    /*11*/ "CANT REDEEM POINTS FROM NULL ACCOUNT!",
+    /*12*/ "FAILED TO PROCESS PAYMENT, NOT PAYMENT DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
+    /*13*/ "VERY LOW AMOUNT WAS SOMEHOW INVESTED. PLEASE LOOK INTO THIS",
 };
 
 /* account types */
@@ -42,10 +48,12 @@ float IBC[][2] = { /* independent-brocker=commissions */
 };
 
 float INVESTMEN_SCHEME[][3] = {
-    /* array-values are in format {points+, %lowest, %highest} */
-    {125, 40, 65},
-    {250, 40, 70},
+    /* array-values are in format {points+, %lowest, %highest} 
+       the data is in descending rank(points) order
+    */
     {375, 40, 80},
+    {250, 40, 70},
+    {125, 40, 65},
     {0, 0, 0} /* terminating condition */
 };
 
@@ -58,16 +66,16 @@ float FSB[][2] = { /* Fast-Start-Bonus */
     {0, 0} /* terminating condition */
 };
 
-float TBB[][10] = { /* Team-Building-Bonus */
+float TBB[][TBB_MAX_GENERATIONS+1] = { /* Team-Building-Bonus */
     /* array-values are in format {PV+, %1st-gen commission, %2nd-gen commission,...,%9th-gen commission} */
     /* NB: the first generation is the person brought by someone you joined NOT the person you joined! */
     
     /* the last value in each array is 0(terminating condition) */
     
-    {0,.5,.5,.5,0,0,0,0},
-    {120,.5,.5,.5,.5,.5,0,0,0,0},
-    {200,.5,.5,.5,.5,.5,.5,.5,0,0},
-    {350,.5,.5,.5,.5,.5,.5,.5,0,0},
+    {0,.5,.5,0,0,0,0,0},
+    {120,.5,.5,.5,.5,0,0,0},
+    {200,.5,.5,.5,.5,.5,0,0},
+    {350,.5,.5,.5,.5,.5,.5,.5},
     {0, 0} /* terminating condition */
 };
 

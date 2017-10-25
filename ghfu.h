@@ -42,8 +42,6 @@ typedef struct investment
 
     Amount returns;
     unsigned int months_returned; /* 0-12, stop giving returns after this value==12 */
-    unsigned int days_to_next_return; /* will make the process of identifying which investment to get a 
-                                         monthly return easy(the operation is peformed everyday!) */
 
     struct investment *next;
     struct investment *prev;
@@ -64,6 +62,7 @@ typedef struct account
     Amount pv; /* Personal Volume (the backbone of all commissions and bonuses) */
     Amount available_balance;
     Amount total_returns;
+    Amount total_redeems;
 
     struct account *uplink;
     AccountPointer children;
@@ -98,7 +97,7 @@ bool invest_money(Account account, const Amount amount, const String package, co
 Account register_member(Account uplink, String names, Amount amount);
 
 void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names);
-void auto_refill(Account account);
+void auto_refill(Account account, float percentages[][2]);
 
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
@@ -106,14 +105,19 @@ void show_investments(const Account account);
 void show_direct_children(const Account account);
 void structure_details(const Account account); 
 
+bool redeem_points(Account account, Amount amount);
+
 void length_of_all_strings(String strings[], int *length);
 void join_strings(char buff[], const String strings[]);
+
+void warn(unsigned int ghfu_errno);
+void gfree(void *p);
 
 /* function definitions */
 
 void memerror()
 {
-    printf("%s\n",ERRORS[0]);
+    warn(0);
 
     /* dump all data to file here (dont overwrite files, always create new files everytime you dump)*/
 
@@ -139,7 +143,7 @@ void init()
 
 void increment_pv(Account account, const Amount points)
 {
-    if(account==NULL){printf("%s\n",ERRORS[7]); return;}
+    if(account==NULL){warn(7); return;}
     account->pv += points;
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
@@ -166,7 +170,7 @@ void increment_pv(Account account, const Amount points)
 
 void award_commission(Account account, Amount points, String commission_type, String reason)
 {
-    if(!points){printf("%s\n",ERRORS[8]); return;}
+    if(!points){warn(8); return;}
     if(account==NULL) {printf("could not award commissions for NULL account!\n"); return;}
     
     Commission new_commission = (Commission)malloc(sizeof(struct commission));
@@ -246,7 +250,7 @@ void award_commission(Account account, Amount points, String commission_type, St
     {
         /* team-building-bonus (whenever a new member joins)*/
         
-        free(new_commission); /* you dont want memory leaks, trust me */
+        gfree(new_commission); /* you dont want memory leaks, trust me */
         
         if(account->uplink==NULL) return;
         int generation = 1;
@@ -254,7 +258,7 @@ void award_commission(Account account, Amount points, String commission_type, St
         
         Commission last_commission;
         
-        while((generation<10) && (uplink!=NULL))
+        while((generation<TBB_MAX_GENERATIONS) && (uplink!=NULL))
         /* the 2 conditions are arranged in that order for a reason; when we have a sufficiently large 
            structure, its mch more likely that we shall reach the generation<10 barrier of TBBs before
            we reach the root node for that given lineage!
@@ -340,10 +344,10 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     if(account==NULL) {printf("could not create investment for NULL account!\n"); return false;}
 
     amount -= OPERATIONS_FEE;
-    if(amount<0){ printf("failed to invest for <%s>; %s\n",account->names,ERRORS[4]); return false; }
-    if(!amount){ printf("failed to invst for <%s>; %s\n",account->names,ERRORS[5]); return false; }
-    if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>; %s\n",account->names,ERRORS[6]); return false; }
-    if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>; %s\n",account->names,ERRORS[9]); return false; }
+    if(amount<0){ printf("failed to invest for <%s>...", account->names); warn(4); return false; }
+    if(!amount){ printf("failed to invest for <%s>...", account->names); warn(5); return false; }
+    if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); warn(6); return false; }
+    if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); warn(9); return false; }
 
     Investment new_investment = (Investment)malloc(sizeof(struct investment));
     
@@ -359,7 +363,6 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
     new_investment->returns = 0;
     new_investment->months_returned = 0;
-    new_investment->days_to_next_return = 30;
 
     new_investment->next = NULL;
     new_investment->prev = NULL;
@@ -387,7 +390,9 @@ Account register_member(Account uplink, String names, Amount amount)
 {
     /* if this function returns NULL, DONT USE RESULT (it indicates an error, more like malloc)*/
     if(amount<(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))
-        { printf("failed to add <%s>; ERROR: %s\n",names,ERRORS[1]); return NULL; }
+        { printf("failed to add <%s>...",names); warn(1); return NULL; }
+    if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
+        { printf("failed to add <%s>...",names); warn(9); return NULL; }
     
     Account new_account = (Account)malloc(sizeof(struct account));
     
@@ -397,6 +402,8 @@ Account register_member(Account uplink, String names, Amount amount)
     new_account->pv = 0;
     new_account->available_balance = 0;
     new_account->total_returns = 0;
+    new_account->total_redeems = 0;
+    
     new_account->uplink = uplink;
     new_account->children = NULL;
     new_account->last_child = NULL;
@@ -429,7 +436,7 @@ Account register_member(Account uplink, String names, Amount amount)
         AccountPointer ap = ap1;
         if(ap==NULL)
         {
-            free(new_account); /* you dont want memory leaks, trust me */
+            gfree(new_account); /* you dont want memory leaks, trust me */
             memerror();
         }
         
@@ -453,7 +460,7 @@ Account register_member(Account uplink, String names, Amount amount)
             award_commission(uplink, points, "FSB",buff);
         }
     }
-    else {free(ap1); /* you dont want memory leaks, trust me */ }
+    else {gfree(ap1); /* you dont want memory leaks, trust me */ }
 
     if(points) award_commission(new_account, points,"TBB","");
 
@@ -462,8 +469,8 @@ Account register_member(Account uplink, String names, Amount amount)
     if(ap==NULL)
     {
          /* you dont want memory leaks, trust me */
-        if(uplink!=NULL) free(ap1);
-        free(new_account);
+        if(uplink!=NULL) gfree(ap1);
+        gfree(new_account);
         
         memerror();
     }
@@ -479,13 +486,7 @@ Account register_member(Account uplink, String names, Amount amount)
     /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
        because invest_money calls incrememt_pv which needs to call children of uplinks)*/
     if(points)
-    {
-        if(!invest_money(new_account, amount, "Investment", 0, false))
-        {
-            free(new_account); /* you dont want memory leaks, trust me */
-            return NULL;
-        }
-    }
+        invest_money(new_account, amount, "Investment", 0, false);
     
     /* update system float */
     SYSTEM_FLOAT += _amount;
@@ -501,7 +502,7 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     
     if(!member){SYSTEM_FLOAT += amount; return;}
     
-    if(IB_account==NULL){printf("%s\n", ERRORS[3]); return;}
+    if(IB_account==NULL){warn(3); return;}
 
     /* create reason for the commission */
     String reason_strings[] = {"IBC from ",buyer_names,"\0"};
@@ -515,14 +516,177 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     SYSTEM_FLOAT += amount;
 }
 
-void auto_refill(Account account)
+void auto_refill(Account account, float percentages[][2])
 {
     /* if account==NULL, calculate autp-refills for all investments in the system otherwise, 
        calculate auto-refill for only that account's investments 
     */
-    if(account==NULL)
+
+    /* this function is called once every month (on an agreed date)
+    */
+
+    time_t t; time(&t);
+    struct tm *today = localtime(&t);
+
+    if(today->tm_mday!=PAYMENT_DAY){warn(12); return;}
+
+    Commission new_commission;
+    Investment inv;
+    int i, buff_length;
+    Amount returns;
+
+    char returns_str[16], points_str[32], active_percentage_str[16];
+
+    if(account!=NULL)
     {
-        /* for account in accounts (starting from HEAD->next)*/
+        if(account->investments!=NULL)
+        {
+           inv = account->investments;
+           while(inv!=NULL)
+           {
+               if(inv->months_returned<12)
+               {
+                    i = 0;
+                    for(; percentages[i][0]; ++i)
+                    {
+                        if(inv->amount >= percentages[i][0]) break;
+                    }
+                    
+                    returns = (inv->amount)*(percentages[i][1])*.01;
+
+                    if(!percentages[i][0]) warn(13);
+                    else
+                    {
+                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        if(new_commission==NULL) memerror();
+
+                        new_commission->reason = NULL;
+                        new_commission->amount = returns;
+
+                        new_commission->next = NULL;
+                        new_commission->prev = NULL;
+
+                        if(account->commissions==NULL)
+                        {
+                            account->commissions = new_commission;
+                            account->last_commission = account->commissions;
+                        }
+                        else
+                        {
+                            new_commission->prev = account->last_commission;
+                            account->last_commission->next = new_commission;
+                            account->last_commission = new_commission;
+                        }
+
+                        sprintf(returns_str," ($%.2f)",returns);
+                        sprintf(points_str," worth %.2f points",inv->amount);
+                        sprintf(active_percentage_str," %.2f%%",percentages[i][1]);
+                        String reason_strings[] = {"Investment return for package <", 
+                            inv->package, "> ",points_str ,returns_str, 
+                            " given at", active_percentage_str, "\0"};
+                        length_of_all_strings(reason_strings, &buff_length);
+
+                        /* create a new array to hold this commission reason (you cant just assign a local char[] to
+                           new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
+                           EXITS, THE POINTER WILL BE ANONYMOUS!)*/
+                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        join_strings(new_commission->reason,reason_strings);
+
+                        ++(inv->months_returned);
+                        account->available_balance += returns;
+                        account->total_returns += returns;
+                        
+                        CUMULATIVE_COMMISSIONS += returns;
+                        COMMISSIONS += returns;
+                        
+                    }
+                   
+               }
+               inv = inv->next;
+           } 
+        }
+        return;
+    }
+
+    AccountPointer acc_p = HEAD;
+    Account acc;
+    acc_p = acc_p==NULL ? acc_p : acc_p->next;
+
+    while(acc_p!=NULL)
+    {
+        acc = acc_p->account;
+
+        if(acc->investments!=NULL)
+        {
+           inv = acc->investments;
+           while(inv!=NULL)
+           {
+               if(inv->months_returned<12)
+               {
+                    i = 0;
+                    for(; percentages[i][0]; ++i)
+                    {
+                        if(inv->amount >= percentages[i][0]) break;
+                    }
+                    
+                    returns = (inv->amount)*(percentages[i][1])*.01;
+
+                    if(!percentages[i][0]) warn(13);
+                    else
+                    {
+                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        if(new_commission==NULL) memerror();
+
+                        new_commission->reason = NULL;
+                        new_commission->amount = returns;
+
+                        new_commission->next = NULL;
+                        new_commission->prev = NULL;
+
+                        if(acc->commissions==NULL)
+                        {
+                            acc->commissions = new_commission;
+                            acc->last_commission = acc->commissions;
+                        }
+                        else
+                        {
+                            new_commission->prev = acc->last_commission;
+                            acc->last_commission->next = new_commission;
+                            acc->last_commission = new_commission;
+                        }
+
+                        sprintf(returns_str," ($%.2f)",returns);
+                        sprintf(points_str," worth %.2f points",inv->amount);
+                        sprintf(active_percentage_str," %.2f%%",percentages[i][1]);
+                        String reason_strings[] = {"Investment return for package <", 
+                            inv->package, "> ",points_str ,returns_str, 
+                            " given at", active_percentage_str, "\0"};
+                        length_of_all_strings(reason_strings, &buff_length);
+
+                        /* create a new array to hold this commission reason (you cant just assign a local char[] to
+                           new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
+                           EXITS, THE POINTER WILL BE ANONYMOUS!)*/
+                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        join_strings(new_commission->reason,reason_strings);
+
+                        ++(inv->months_returned);
+                        acc->available_balance += returns;
+                        acc->total_returns += returns;
+
+                        CUMULATIVE_COMMISSIONS += returns;
+                        COMMISSIONS += returns;
+                        
+                    }
+                   
+               }
+               inv = inv->next;
+           } 
+        }
+
+
+        acc_p = acc_p->next;
     }
 }
 
@@ -596,6 +760,7 @@ void show_investments(const Account account)
        make the function recursive as this becomes CPU expensive in the long run */
 
     Investment inv;
+    struct tm *lt;
     if(account!=NULL)
     {
         printf("\n  %s's INVESTMENTS\n",account->names);
@@ -606,11 +771,12 @@ void show_investments(const Account account)
         
         while(inv!=NULL)
         {
-            printf("    Date: %ld\n",inv->date);
+            lt = localtime(&(inv->date));
+            printf("    Date (DD/MM/YYY): %d:%d, %d/%d/%d\n",
+                lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900));
             printf("    Weight: %.2f points\n",inv->amount);
             printf("    Package: %s\n",inv->package);
             printf("    Months returned: %d\n",inv->months_returned);
-            printf("    Days to next return: %d\n",inv->days_to_next_return);
             
             inv = inv->next;
             
@@ -635,11 +801,12 @@ void show_investments(const Account account)
 
         while(inv!=NULL)
         {
-            printf("    Date: %ld\n",inv->date);
+            lt = localtime(&(inv->date));
+            printf("    Date (DD/MM/YYY): %d:%d, %d/%d/%d\n",
+                lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900));
             printf("    Weight: %.2f points\n",inv->amount);
             printf("    Package: %s\n",inv->package);
             printf("    Months returned: %d\n",inv->months_returned);
-            printf("    Days to next return: %d\n",inv->days_to_next_return);
             
             inv = inv->next;
             
@@ -717,6 +884,7 @@ void structure_details(const Account account)
         printf("  PV = %.2lf points\n",account->pv);
         printf("  Total Returns = $%.2lf\n",account->total_returns);
         printf("  Available Balance = $%.2lf\n",account->available_balance);
+        printf("  Total Redeemed = $%.2lf\n",account->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             account->leg_volumes[0],account->leg_volumes[1],account->leg_volumes[2]);
         
@@ -740,6 +908,7 @@ void structure_details(const Account account)
         printf("  PV = %.2lf points\n",acc->pv);
         printf("  Total Returns = $%.2lf\n",acc->total_returns);
         printf("  Available Balance = $%.2lf\n",acc->available_balance);
+        printf("  Total Redeemed = $%.2lf\n",acc->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             acc->leg_volumes[0],acc->leg_volumes[1],acc->leg_volumes[2]);
         
@@ -750,6 +919,21 @@ void structure_details(const Account account)
         acc_p = acc_p->next;
     }
     
+}
+
+bool redeem_points(Account account, Amount amount)
+{
+    /* if this function returns true but the money actually is'nt redeemed for some reason (loss in
+       network for example or when the mobile money API is down), please REVERSE this operation or the 
+       member will actually lose their returns permanently! 
+    */
+    if(account==NULL){warn(11); return false;}
+    if(amount>(account->available_balance)){warn(10); return false;}
+
+    account->available_balance -= amount;
+    account->total_redeems += amount;
+
+    return true;
 }
 
 void length_of_all_strings(String strings[], int *length)
@@ -772,4 +956,16 @@ void join_strings(char buff[], const String strings[])
         index += len;
         ++i;
     }
+}
+
+void warn(unsigned int ghfu_errno)
+{
+    printf("\033[33m%s\033[0m\n",ERRORS[ghfu_errno]);
+}
+
+void gfree(void *p)
+{
+    /* free mallc'd memory and set pointer to NULL */
+    free(p);
+    p = NULL;
 }

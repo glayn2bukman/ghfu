@@ -37,7 +37,100 @@ int main()
     invest_money(brocker1, 40+10+180+1360, "Second Package",2,true);
     invest_money(brocker1, 40+10+180+980, "Third Package",2,true);
 
+    float monhtly_auto_refill_percentages[12][4][2] = {
+        /* all arrays MUST be in descending rank order and MUST end with the {0,0} terminating condition */
+        {
+            {375, 64},
+            {250, 60},
+            {125, 49},
+            {0, 0}
+        },        
+
+        {
+            {375, 60},
+            {250, 65},
+            {125, 60},
+            {0, 0}
+        },        
+
+        {
+            {375, 43},
+            {250, 51},
+            {125, 54},
+            {0, 0}
+        },        
+
+        {
+            {375, 60},
+            {250, 65},
+            {125, 60},
+            {0, 0}
+        },     
+
+        {
+            {375, 78},
+            {250, 69},
+            {125, 65},
+            {0, 0}
+        },        
+
+        {
+            {375, 67},
+            {250, 63},
+            {125, 59},
+            {0, 0}
+        },        
+
+        {
+            {375, 80},
+            {250, 69},
+            {125, 65},
+            {0, 0}
+        },        
+
+        {
+            {375, 58},
+            {250, 42},
+            {125, 48},
+            {0, 0}
+        },        
+
+        {
+            {375, 53},
+            {250, 65},
+            {125, 60},
+            {0, 0}
+        },        
+
+        {
+            {375, 49},
+            {250, 65},
+            {125, 52},
+            {0, 0}
+        },        
+
+        {
+            {375, 67},
+            {250, 58},
+            {125, 49},
+            {0, 0}
+        },        
+
+        {
+            {375, 62},
+            {250, 66},
+            {125, 48},
+            {0, 0}
+        },        
+
+    };
+
+    /* now auto-refill for all investments for one entire season/year */
+    for(int i=0; i<12;++i) auto_refill(NULL, monhtly_auto_refill_percentages[i]);
+
     structure_details(NULL);
 
+    printf("SYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
+    
     return 0;
 }
