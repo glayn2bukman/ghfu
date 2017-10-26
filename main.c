@@ -140,16 +140,17 @@ int main()
 
     printf("SYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
+    /*
     calculate_tvc(NULL);
-
     Account investor8 = register_member(brocker1, "Investor 8",
         ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*1.82)
     );
-    calculate_tvc(brocker1);
+    calculate_tvc(NULL);
 
-
-    structure_details(brocker1);
-
+    structure_details(NULL);
+    */
+    
+    structure_details(get_account_by_id(6));
     
     return 0;
 }

@@ -1,8 +1,8 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 25 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
-#define TVC_DAY 25 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 26 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define TVC_DAY 26 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40 /* $ */
@@ -27,7 +27,7 @@ char *ERRORS[] = {
     /*11*/ "CANT REDEEM POINTS FROM NULL ACCOUNT!",
     /*12*/ "FAILED TO PROCESS PAYMENT, NOT PAYMENT DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
     /*13*/ "VERY LOW AMOUNT WAS SOMEHOW INVESTED. PLEASE LOOK INTO THIS",
-    /*14*/ "TVC ONLY AVAILABLE FOR MEMBERS WITH 3 LEGS, EACH WITH ATLEAST ONE DOWNLINK!",
+    /*14*/ "TVC ONLY AVAILABLE FOR MEMBERS ATLEAST 2 LEGS, EACH WITH ATLEAST ONE DOWNLINK!",
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
 };
 

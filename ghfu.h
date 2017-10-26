@@ -63,6 +63,7 @@ typedef struct account_pointer
 
 typedef struct account
 {
+    ID id;
     String names;
     Amount pv; /* Personal Volume (the backbone of all commissions and bonuses) */
     Amount available_balance;
@@ -89,7 +90,7 @@ typedef struct account
 } *Account;
 
 Amount SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS;
-ID ACTIVE_ACCOUNTS;
+ID ACTIVE_ACCOUNTS, CURRENT_ID;
 
 AccountPointer HEAD, TAIL;
 
@@ -115,6 +116,8 @@ bool redeem_points(Account account, Amount amount);
 
 void length_of_all_strings(String strings[], int *length);
 void join_strings(char buff[], const String strings[]);
+
+Account get_account_by_id(const ID id);
 
 void warn(unsigned int ghfu_errno);
 void gfree(void *p);
@@ -144,7 +147,10 @@ void init()
     
     /* these data variables shall be reset when reading data from file */
     SYSTEM_FLOAT=0; CUMULATIVE_COMMISSIONS=0; COMMISSIONS=0;
-    ACTIVE_ACCOUNTS=0;
+    
+    ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
+
+    CURRENT_ID = 0; /* only increments, never the opposite */
 }
 
 void increment_pv(Account account, const Amount points)
@@ -404,6 +410,7 @@ Account register_member(Account uplink, String names, Amount amount)
     
     if(new_account==NULL) memerror();
 
+    new_account->id = CURRENT_ID+1;
     new_account->names = names;
     new_account->pv = 0;
     new_account->available_balance = 0;
@@ -496,6 +503,8 @@ Account register_member(Account uplink, String names, Amount amount)
     
     /* update system float */
     SYSTEM_FLOAT += _amount;
+
+    ++CURRENT_ID; ++ACTIVE_ACCOUNTS;
 
     return new_account;
 }
@@ -723,11 +732,15 @@ void calculate_tvc(Account account)
     {
         if(
             /* since logic operators are processed left to right, this code won't 
-               break when account->children->next==NULL or when account->children->next->next==NULL!
+               break when account->children->next==NULL!
             */
            (account->children!=NULL) && 
            (account->children->next!=NULL) && 
-           (account->children->next->next!=NULL))
+           /* in addition to having atleast 2 direct-children, each child must have 
+              atleast 1 direct child of their own */
+           (((Account)(account->children->account))->children!=NULL) &&
+           (((Account)(account->children->next->account))->children!=NULL)
+           )
         {
             lower_leg_volume = account->leg_volumes[0];
             i = 1;
@@ -814,7 +827,11 @@ void calculate_tvc(Account account)
             */
            (acc->children!=NULL) && 
            (acc->children->next!=NULL) && 
-           (acc->children->next->next!=NULL))
+           /* in addition to having atleast 2 direct-children, each child must have 
+              atleast 1 direct child of their own */
+           (((Account)(acc->children->account))->children!=NULL) &&
+           (((Account)(acc->children->next->account))->children!=NULL)
+           )
         {
             lower_leg_volume = acc->leg_volumes[0];
             i = 1;
@@ -1076,6 +1093,7 @@ void structure_details(const Account account)
     if(account!=NULL)
     {
         printf("\n%s\n",account->names);
+        printf("  ID: %ld\n",account->id);
         printf("  Uplink: %s\n", account->uplink==NULL ? "ROOT" : account->uplink->names);
         printf("  PV = %.2lf points\n",account->pv);
         printf("  Total Returns = $%.2lf\n",account->total_returns);
@@ -1100,6 +1118,7 @@ void structure_details(const Account account)
         acc = acc_p->account;
 
         printf("\n%s\n",acc->names);
+        printf("  ID: %ld\n",acc->id);
         printf("  Uplink: %s\n", acc->uplink==NULL ? "ROOT" : acc->uplink->names);
         printf("  PV = %.2lf points\n",acc->pv);
         printf("  Total Returns = $%.2lf\n",acc->total_returns);
@@ -1152,6 +1171,44 @@ void join_strings(char buff[], const String strings[])
         index += len;
         ++i;
     }
+}
+
+Account get_account_by_id(const ID id)
+{
+    /* this function returns NULL if any of the following is true;
+        1) id>CURRENT_ID
+        2) HEAD==NULL (no member in system)
+        3) HEAD->next==NULL (no member in system)
+        4) the requested account was deleted and is nolonger in the system
+    
+    */
+    if((id>CURRENT_ID) || (HEAD==NULL) || (HEAD->next==NULL)) return NULL;
+
+    /* search from HEAD or from TAIL depending on if the id is closer to the last member id or not
+       the problem with this however is that since the ID-counter never decrements(even when amember
+       is deleted from the system), the id may be closer to the HEAD than the TAIL when a sufficiently
+       large group of members have been deleted but the calculation will assume the id is still closer
+       to the TAIL as only the TAIL id is considered!
+    */
+    AccountPointer acc_p = (TAIL==HEAD) ? HEAD->next :
+        (id > (((Account)(TAIL->account))->id)/2 ? TAIL : HEAD->next);
+    
+    
+    bool ascending = acc_p==HEAD->next ? true : false;
+    
+    while(acc_p!=NULL)
+    {
+        if(((Account)(acc_p->account))->id==id) break;
+
+        /* break flow the moment its detected that the account was deleted. this is made easy by 
+           the fact that id's are incremental */
+        if(ascending && (((Account)(acc_p->account))->id > id)) return NULL;
+        if((!ascending) && (((Account)(acc_p->account))->id < id)) return NULL;
+
+        acc_p = ascending ? acc_p->next: acc_p->prev;
+    }
+    
+    return acc_p==NULL ? NULL : (Account)(acc_p->account); /*if return is NULL, that account was deleted*/
 }
 
 void warn(unsigned int ghfu_errno)
