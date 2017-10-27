@@ -1,15 +1,15 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 26 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
-#define TVC_DAY 26 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 27 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define TVC_DAY 27 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
-#define ACCOUNT_CREATION_FEE 40 /* $ */
-#define ANNUAL_SUBSCRIPTION_FEE 10 /* $ */
-#define OPERATIONS_FEE 180 /* $ */
-#define MINIMUM_INVESTMENT 500 /* 125 points */
-#define MAXIMUM_INVESTMENT 1500 /* 375 points */
+#define ACCOUNT_CREATION_FEE 40.0 /* $ */
+#define ANNUAL_SUBSCRIPTION_FEE 10.0 /* $ */
+#define OPERATIONS_FEE 180.0 /* $ */
+#define MINIMUM_INVESTMENT 500.0 /* 125 points */
+#define MAXIMUM_INVESTMENT 1500.0 /* 375 points */
 
 /* program errors */
 char *ERRORS[] = {

@@ -5,40 +5,40 @@ int main()
 	init();
 
     /* create a simple brocker */
-    Account brocker1 = register_member(NULL, "Brocker 1",ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE);
+    Account brocker1 = register_member(NULL, "Brocker 1",50);
 
     /* now, let brocker bring on a new investor */
     Account investor1 = register_member(brocker1, "Investor 1",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+MINIMUM_INVESTMENT
+        10+40+180+500
     );
 
     /* let brocker add second investor */
     Account investor2 = register_member(brocker1, "Investor 2",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*3)
+        10+40+180+(500*3)
     );
 
 
     /* let first investor add third investor */
     Account investor3 = register_member(investor1, "Investor 3",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2)
+        10+40+180+(500*2)
     );
 
     /* let third investor add fourth investor */
     Account investor4 = register_member(investor3, "Investor 4",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*1.4)
+        10+40+180+(500*1.4)
     );
 
     /* let second investor add fifth investor */
     Account investor5 = register_member(investor2, "Investor 5",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2.1)
+        10+40+180+(500*2.1)
     );
 
     /* let brocker add other invetors to make third leg */
     Account investor6 = register_member(brocker1, "Investor 6",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*1.46)
+        10+40+180+(500*1.46)
     );
     Account investor7 = register_member(brocker1, "Investor 7",
-        ACCOUNT_CREATION_FEE+ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE+(MINIMUM_INVESTMENT*2.62)
+        10+40+180+(500*2.46)
     );
 
 
