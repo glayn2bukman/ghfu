@@ -30,6 +30,21 @@ char *ERRORS[] = {
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
 };
 
+/* db formation instructions */
+char *DB_INSTRUCTIONS[][2]={
+    {"account_info", "names varchar(100), account_id int, uplink varchar(100), "
+                     "pv float, total_returns float, available_balance float, total_redeemed float"},
+    {"investments", "data varchar(20), points float, package text, months_returned int"},            
+    {"commissions","amount float, reason text"},
+    {"direct_children","names varchar(100)"},
+    {"leg_volumes", "leg_one_volume float, leg_two_volume float, leg_three_volume float"},
+    
+    {"\0","\0"} /* termination condition */
+};
+
+char *DB_CMDS_EXT = "ghfudbcmds";
+char *DB_EXT = "ghfudb";
+
 /* account types */
 char *ACCOUNTS[] = {
     "Independent Brocker",

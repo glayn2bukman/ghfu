@@ -79,9 +79,11 @@ int main()
     for(int i=0; i<12;++i) monthly_operations(monhtly_auto_refill_percentages[i]);
 
         
-    structure_details(NULL);
+    //structure_details(NULL);
     
     printf("\nSYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
+    
+    printf("dumped data? %s\n", dump_structure_details(brocker1, ".") ? "yes" : "no");
     
     return 0;
 }

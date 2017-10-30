@@ -110,11 +110,19 @@ bool raise_rank(Account account);
 void calculate_tvc(Account account);
 void award_rank_monthly_bonuses(Account account);
 
+/* functions to visually display accounts */
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
 void show_investments(const Account account);
 void show_direct_children(const Account account);
 void structure_details(const Account account); 
+
+/* functions to dump account information to secondary interfaces accessed by other APIs eg from Python */
+void dump_commissions(const Account account, FILE *fout);
+void dump_leg_volumes(const Account account, FILE *fout);
+void dump_investments(const Account account, FILE *fout);
+void dump_direct_children(const Account account, FILE *fout);
+bool dump_structure_details(const Account account, String fout_path); 
 
 bool redeem_points(Account account, Amount amount);
 

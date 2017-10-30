@@ -1,5 +1,8 @@
 from ctypes import *
-ghfu = CDLL("./libghfu.so")
+ghfu = CDLL("lib/libjermGHFU.so")
+jermCrypt = CDLL("lib/libjermCrypt.so")
+#jermCrypt.encrypt_file(fin,pswd,fout,int overwrite,int verbose)
+#jermCrypt.decrypt_file(fin,pswd,fout,int overwrite,int verbose)
 
 ghfu.init()
 
@@ -40,7 +43,7 @@ monhtly_auto_refill_percentages = m_a_r_p(
 )
 
 for monthly_percentage in monhtly_auto_refill_percentages:
-    ghfu.auto_refill(None, monthly_percentage)
+    ghfu.monthly_operations(monthly_percentage)
 
 ghfu.structure_details(None)
 
