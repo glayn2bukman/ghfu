@@ -161,6 +161,9 @@ void award_commission(Account account, Amount points, String commission_type, St
         update_pv = true;        
     }
     else if(!strcmp(commission_type, "DRA")) {p_comm = points;} /*director's recorgnition award*/    
+    else if(!strcmp(commission_type, "HOB")) {p_comm = HOB*0.01*points;}    
+    else if(!strcmp(commission_type, "LCB")) {p_comm = LCB*0.01*points;}    
+    else if(!strcmp(commission_type, "EAB")) {p_comm = EAB*0.01*points;}    
     else if(!strcmp(commission_type, "TBB"))
     {
         /* team-building-bonus (whenever a new member joins)*/
@@ -348,7 +351,8 @@ Account register_member(Account uplink, String names, Amount amount)
     new_account->leg_volumes[1] = 0.0;
     new_account->leg_volumes[2] = 0.0;
 
-    new_account->TVC_level = 0;
+    new_account->TVC_levels[0] = 0;
+    new_account->TVC_levels[1] = 0;
 
     new_account->investments = NULL;
     new_account->last_investment = NULL;
@@ -731,8 +735,8 @@ void calculate_tvc(Account account)
                 lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
                     account->leg_volumes[i] : lower_leg_volume ;
 
-            actual_lower_leg_volume = lower_leg_volume - account->TVC_level;
-            account->TVC_level = lower_leg_volume;
+            actual_lower_leg_volume = lower_leg_volume - account->TVC_levels[0];
+            account->TVC_levels[0] = lower_leg_volume;
             
             j = 0;
             for(;TVC[j][1];++j)
@@ -825,8 +829,8 @@ void calculate_tvc(Account account)
                 lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
                     acc->leg_volumes[i] : lower_leg_volume ;
 
-            actual_lower_leg_volume = lower_leg_volume - acc->TVC_level;
-            acc->TVC_level = lower_leg_volume;
+            actual_lower_leg_volume = lower_leg_volume - acc->TVC_levels[0];
+            acc->TVC_levels[0] = lower_leg_volume;
             
             j = 0;
             for(;TVC[j][1];++j)
@@ -885,6 +889,71 @@ void calculate_tvc(Account account)
                         CUMULATIVE_COMMISSIONS += returns;
                         COMMISSIONS += returns;
             
+            }
+        }
+
+        acc_p = acc_p->next;
+    }
+}
+
+void award_rank_monthly_bonuses(Account account)
+{
+    Amount lower_leg_volume, actual_lower_leg_volume;
+    unsigned int i;
+
+    if(account!=NULL)
+    {
+        if(account->rank>=6) /* rank-bonuses for rank>=Senior Director*/
+        {
+            lower_leg_volume = account->leg_volumes[0];
+            i = 0;
+            for(; i<3; ++i)
+                lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
+                    account->leg_volumes[i] : lower_leg_volume ;
+
+            actual_lower_leg_volume = lower_leg_volume - account->TVC_levels[1];
+            account->TVC_levels[1] = lower_leg_volume;
+            
+            if(actual_lower_leg_volume)
+            {
+                award_commission(account, actual_lower_leg_volume, "HOB", "HOB");
+                if(account->rank>=8)
+                {
+                    award_commission(account, actual_lower_leg_volume, "LCB", "LCB");
+                    award_commission(account, actual_lower_leg_volume, "EAB", "EA bonus");
+                }
+            }
+        }
+
+        return;
+    }
+    AccountPointer acc_p = HEAD;
+    Account acc;
+    acc_p = acc_p==NULL ? acc_p : acc_p->next;
+
+    while(acc_p!=NULL)
+    {
+        acc = acc_p->account;
+
+        if(acc->rank>=6) /* rank-bonuses for rank>=Senior Director*/
+        {
+            lower_leg_volume = acc->leg_volumes[0];
+            i = 0;
+            for(; i<3; ++i)
+                lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
+                    acc->leg_volumes[i] : lower_leg_volume ;
+
+            actual_lower_leg_volume = lower_leg_volume - acc->TVC_levels[1];
+            acc->TVC_levels[1] = lower_leg_volume;
+            
+            if(actual_lower_leg_volume)
+            {
+                award_commission(acc, actual_lower_leg_volume, "HOB", "HOB");
+                if(acc->rank>=8)
+                {
+                    award_commission(acc, actual_lower_leg_volume, "LCB", "LCB");
+                    award_commission(acc, actual_lower_leg_volume, "EAB", "EA bonus");
+                }
             }
         }
 
@@ -1198,6 +1267,14 @@ Account get_account_by_id(const ID id)
     }
     
     return acc_p==NULL ? NULL : (Account)(acc_p->account); /*if return is NULL, that account was deleted*/
+}
+
+void monthly_operations(float auto_refill_percentages[4][2])
+{
+    /* perform all monthly operations */
+    auto_refill(NULL, auto_refill_percentages);
+    calculate_tvc(NULL);
+    award_rank_monthly_bonuses(NULL);
 }
 
 void ghfu_warn(unsigned int ghfu_errno)

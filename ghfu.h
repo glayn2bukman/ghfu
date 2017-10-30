@@ -76,10 +76,11 @@ typedef struct account
     Commission last_commission;
 
     Amount leg_volumes[3];
-    Amount TVC_level; /* team-volume-commission level. 
+    Amount TVC_levels[2]; /* team-volume-commission levels. 
                          always subtract this value from the lower leg to compute the TVC.
                          This way, we accomplish the "leveling off" of TVC legs everytime
-                         TVCs are calculated
+                         TVCs are calculated. since TVC is for only the first 2 legs, we need another
+                         TVC_level to be used in determining rank-related bonuses
                       */
 
     Investment investments;
@@ -107,6 +108,7 @@ void buy_property(Account IB_account, const Amount amount, const bool member, co
 void auto_refill(Account account, float percentages[][2]);
 bool raise_rank(Account account);
 void calculate_tvc(Account account);
+void award_rank_monthly_bonuses(Account account);
 
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
@@ -120,6 +122,8 @@ void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);
 
 Account get_account_by_id(const ID id);
+
+void monthly_operations(float auto_refill_percentages[4][2]);
 
 void ghfu_warn(unsigned int ghfu_errno);
 void gfree(void *p);

@@ -1,8 +1,7 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
-#define TVC_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 30 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40.0 /* $ */
@@ -152,6 +151,7 @@ Director DRCA[] = { /* DIRECTOR'S RECOGNITION CASH AWARD */
     {"END", 0}, /* terminating condition */
 };
 
+/* all the bonuses below are in %*/
 float HOB = .05; /* home-office-bonus */
 float LCB = .05; /* laxury-car-bonus */
 float EAB = .03; /* expense-account-bonus */
