@@ -1,3 +1,7 @@
+/* export this file as a library with
+    $ gcc -shared -fPIC -o libghfu.so ghfu.c
+*/
+
 #include "ghfu.h"
 #include "data.h"
 
@@ -38,25 +42,69 @@ void init()
 
 void increment_pv(Account account, const Amount points)
 {
+    /* this function ensures that all PV increments anss rank updates in a certain line of sucession
+       occur are updated all at one when a PV changes. this in turn means that the web-API that calls
+       for information never delays because the data is not calculated/determined at calling time but
+       rather is updated and made readily available any time the web-API needs it 
+    */
     if(account==NULL){ghfu_warn(7); return;}
     account->pv += points;
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
        this dramatically reduces the time needed to calculate the TVCs and all other TEAM-volume related 
-       calculations as the values will be readily available
+       calculations as the values will be readily available when needed
+
+       also, increment ranks for all liable members in that linear tree!
     */
 
     Account acc = account;
+    unsigned int highest_rank, i;
     
     while(acc!=NULL)
     {
+        raise_rank(acc);
+
+        highest_rank = acc->highest_leg_ranks[0];
+        for(i=1;i<3;++i)
+            acc->highest_leg_ranks[i]>highest_rank ? highest_rank=acc->highest_leg_ranks[i] : 0;
+
         if(acc->uplink!=NULL)
         {
             if(acc==acc->uplink->children->account)
-                {acc->uplink->leg_volumes[0] += points;}
+            {
+                acc->uplink->leg_volumes[0] += points;
+                
+                /* uplink highest leg-rank could change due to new account rank*/
+                acc->uplink->highest_leg_ranks[0]<acc->rank ? (acc->uplink->highest_leg_ranks[0]=acc->rank) : 0;
+
+                /* uplink highest leg-rank could change due to new highest account leg-rank*/
+                acc->uplink->highest_leg_ranks[0]<highest_rank ? 
+                    (acc->uplink->highest_leg_ranks[0]=highest_rank) : 0;
+            }
             else if(acc==acc->uplink->children->next->account)
-                {acc->uplink->leg_volumes[1] += points;}
-            else {acc->uplink->leg_volumes[2] += points;}
+            {
+                acc->uplink->leg_volumes[1] += points;
+                
+                /* uplink highest leg-rank could change due to new account rank*/
+                acc->uplink->highest_leg_ranks[1]<acc->rank ? (acc->uplink->highest_leg_ranks[1]=acc->rank) : 0;
+
+                /* uplink highest leg-rank could change due to new highest account leg-rank*/
+                acc->uplink->highest_leg_ranks[1]<highest_rank ? 
+                    (acc->uplink->highest_leg_ranks[1]=highest_rank) : 0;
+
+            }
+            else 
+            {
+                acc->uplink->leg_volumes[2] += points;
+                
+                /* uplink highest leg-rank could change due to new account rank*/
+                acc->uplink->highest_leg_ranks[2]<acc->rank ? (acc->uplink->highest_leg_ranks[2]=acc->rank) : 0;
+
+                /* uplink highest leg-rank could change due to new highest account leg-rank*/
+                acc->uplink->highest_leg_ranks[2]<highest_rank ? 
+                    (acc->uplink->highest_leg_ranks[2]=highest_rank) : 0;
+
+            }
         }
         acc = acc->uplink;
     }
@@ -79,7 +127,9 @@ void award_commission(Account account, Amount points, String commission_type, St
 
     Amount p_comm=0;
     char points_str[16];
-    int buff_length;
+    unsigned int buff_length;
+    
+    bool update_pv = false;
     
     if(!strcmp(commission_type,"FSB"))
     {
@@ -94,22 +144,6 @@ void award_commission(Account account, Amount points, String commission_type, St
 
         p_comm = (FSB[i][1]/100)*points;
         
-        new_commission->amount = p_comm;
-        account->available_balance += p_comm;
-        account->total_returns += p_comm;
-        /* increment_pv(account,points); THIS IS CATERED FOR WHEN invest_money IS CALLED FROM register_member*/
-        
-        if(account->commissions==NULL)
-        {
-            account->commissions = new_commission;
-            account->last_commission = account->commissions;
-        }
-        else
-        {
-            new_commission->prev = account->last_commission;
-            account->last_commission->next = new_commission;
-            account->last_commission = new_commission;
-        }
     }
     else if(!strcmp(commission_type,"IBC"))
     {
@@ -124,23 +158,9 @@ void award_commission(Account account, Amount points, String commission_type, St
         
         p_comm = (IBC[i][1]/100)*points;
         
-        new_commission->amount = p_comm;
-        account->available_balance += p_comm;
-        account->total_returns += p_comm;
-        increment_pv(account,points);
-        
-        if(account->commissions==NULL)
-        {
-            account->commissions = new_commission;
-            account->last_commission = account->commissions;
-        }
-        else
-        {
-            new_commission->prev = account->last_commission;
-            account->last_commission->next = new_commission;
-            account->last_commission = new_commission;
-        }
+        update_pv = true;        
     }
+    else if(!strcmp(commission_type, "DRA")) {p_comm = points;} /*director's recorgnition award*/    
     else if(!strcmp(commission_type, "TBB"))
     {
         /* team-building-bonus (whenever a new member joins)*/
@@ -229,6 +249,24 @@ void award_commission(Account account, Amount points, String commission_type, St
         if(new_commission->reason==NULL) memerror();
         join_strings(new_commission->reason,reason_strings);
 
+        new_commission->amount = p_comm;
+        account->available_balance += p_comm;
+        account->total_returns += p_comm;
+
+        if(account->commissions==NULL)
+        {
+            account->commissions = new_commission;
+            account->last_commission = account->commissions;
+        }
+        else
+        {
+            new_commission->prev = account->last_commission;
+            account->last_commission->next = new_commission;
+            account->last_commission = new_commission;
+        }
+
+        if(update_pv) increment_pv(account,points);
+
         CUMULATIVE_COMMISSIONS += p_comm;
         COMMISSIONS += p_comm;
     }
@@ -315,6 +353,12 @@ Account register_member(Account uplink, String names, Amount amount)
     new_account->investments = NULL;
     new_account->last_investment = NULL;
 
+    new_account->rank = 0;
+
+    new_account->highest_leg_ranks[0] = 0.0;
+    new_account->highest_leg_ranks[1] = 0.0;
+    new_account->highest_leg_ranks[2] = 0.0;
+
     /* attempt to invest money (if amount>(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))*/
     Amount _amount = amount;
     amount = amount-(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE);
@@ -348,7 +392,7 @@ Account register_member(Account uplink, String names, Amount amount)
         {
             /* create reason for the commission and award the commission */
             String reason_strings[] = {"FSB from ",names,"\0"};
-            int buff_length;
+            unsigned int buff_length;
             length_of_all_strings(reason_strings, &buff_length);
             char buff[buff_length+1];
             join_strings(buff,reason_strings);
@@ -404,7 +448,7 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
 
     /* create reason for the commission */
     String reason_strings[] = {"IBC from ",buyer_names,"\0"};
-    int buff_length;
+    unsigned int buff_length;
     length_of_all_strings(reason_strings, &buff_length);
     char reason[buff_length+1];
     join_strings(reason,reason_strings);
@@ -432,7 +476,7 @@ void auto_refill(Account account, float percentages[][2])
 
     Commission new_commission;
     Investment inv;
-    int i, buff_length;
+    unsigned int i, buff_length;
     Amount returns;
 
     char returns_str[16], points_str[32], active_percentage_str[16];
@@ -590,6 +634,62 @@ void auto_refill(Account account, float percentages[][2])
     }
 }
 
+bool raise_rank(Account account)
+{
+    /* if true; award onetime Director's recorgintion award...
+       however, the award is in such a way that its descrete ie if one leaps
+       from rank r to (r+4), they get the award for (r+4) not all the awards from
+       (r+1) through (r+4)!
+    */
+    bool rank_raised = false;
+    if(account==NULL) return rank_raised;
+    if(account->rank==11) return rank_raised; /* already at maximum rank */
+
+    unsigned int rank = account->rank;
+
+    while((RANK_DETAILS[rank][3]!=1) && ++rank)
+    {
+        if(!(
+                (account->highest_leg_ranks[0]>=RANK_DETAILS[rank][0]) &&
+                (account->highest_leg_ranks[1]>=RANK_DETAILS[rank][1]) &&
+                (account->highest_leg_ranks[2]>=RANK_DETAILS[rank][2]) &&
+
+                (account->pv>=RANK_DETAILS[rank][3]) &&
+                ((account->leg_volumes[0]+account->leg_volumes[1] +
+                    account->leg_volumes[2])>=RANK_DETAILS[rank][4]) &&
+
+                /* lastly, check for the lesser-leg volume */
+                ((account->leg_volumes[0]<account->leg_volumes[1] ? 
+                    (account->leg_volumes[0]<account->leg_volumes[2] ? 
+                        account->leg_volumes[0] : account->leg_volumes[2]
+                    ) 
+                    : 
+                    (account->leg_volumes[1]<account->leg_volumes[2] ? 
+                        account->leg_volumes[1] : account->leg_volumes[2]
+                    )
+                ) >= RANK_DETAILS[rank][5])
+        )) {--rank; break;}
+    }
+
+    rank = rank==12 ? --rank : rank;
+
+    if(rank==account->rank) return rank_raised;
+
+    rank_raised = true;
+
+    unsigned int buff_length=0;
+    String reason_strings[] = {"DRA, new rank is <", RANKS[rank], ">", "\0"};
+    length_of_all_strings(reason_strings, &buff_length);
+    char buff[buff_length+1];
+    join_strings(buff,reason_strings);
+    
+    if(RANK_DETAILS[rank][6]) award_commission(account, RANK_DETAILS[rank][6], "DRA", buff);
+    
+    account->rank = rank;
+    
+    return rank_raised;
+}
+
 void calculate_tvc(Account account)
 {
     /* this function should be called only once a month on the agreed day */
@@ -603,7 +703,7 @@ void calculate_tvc(Account account)
     if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15); return;}
 
     Amount lower_leg_volume, actual_lower_leg_volume, returns;
-    int i, j, buff_length; /* i is used for getting the lower_leg_volume, while j is used to
+    unsigned int i, j, buff_length; /* i is used for getting the lower_leg_volume, while j is used to
                               get the TVC % comission based on the account PV
                            */
 
@@ -626,8 +726,8 @@ void calculate_tvc(Account account)
            )
         {
             lower_leg_volume = account->leg_volumes[0];
-            i = 1;
-            for(; i<3; ++i)
+            i = 0;
+            for(; i<2/*only he first 2 legs considered*/; ++i)
                 lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
                     account->leg_volumes[i] : lower_leg_volume ;
 
@@ -642,8 +742,11 @@ void calculate_tvc(Account account)
             
             j = TVC[j][1] ? j : --j;
             
-            /* returns should not be more than PV made in the first month!!!! */
             returns = TVC[j][1]*.01*actual_lower_leg_volume;
+            /* returns should not be more than PV made in the first month!!!!
+               i rather changed this condition to "thou shalt not get TVC>375 points"
+            */
+            returns = returns>(MAXIMUM_INVESTMENT*POINT_FACTOR) ? MAXIMUM_INVESTMENT*POINT_FACTOR : returns;
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
@@ -717,8 +820,8 @@ void calculate_tvc(Account account)
            )
         {
             lower_leg_volume = acc->leg_volumes[0];
-            i = 1;
-            for(; i<3; ++i)
+            i = 0;
+            for(; i<2/*only he first 2 legs considered*/; ++i)
                 lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
                     acc->leg_volumes[i] : lower_leg_volume ;
 
@@ -733,8 +836,11 @@ void calculate_tvc(Account account)
             
             j = TVC[j][1] ? j : --j;
             
-            /* returns should not be more than PV made in the first month!!!! */
             returns = TVC[j][1]*.01*actual_lower_leg_volume;
+            /* returns should not be more than PV made in the first month!!!!
+               i rather changed this condition to "thou shalt not get TVC>375 points"
+            */
+            returns = returns>(MAXIMUM_INVESTMENT*POINT_FACTOR) ? MAXIMUM_INVESTMENT*POINT_FACTOR : returns;
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
@@ -1034,7 +1140,7 @@ bool redeem_points(Account account, Amount amount)
     return true;
 }
 
-void length_of_all_strings(String strings[], int *length)
+void length_of_all_strings(String strings[], unsigned int *length)
 {
     *length=0;
     for(int i=0; strcmp(strings[i],"\0"); ++i) *length += strlen(strings[i]);    

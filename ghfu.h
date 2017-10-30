@@ -85,6 +85,9 @@ typedef struct account
     Investment investments;
     Investment last_investment;
 
+    unsigned int rank;
+    unsigned int highest_leg_ranks[3];
+
 } *Account;
 
 Amount SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS;
@@ -102,6 +105,7 @@ Account register_member(Account uplink, String names, Amount amount);
 
 void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names);
 void auto_refill(Account account, float percentages[][2]);
+bool raise_rank(Account account);
 void calculate_tvc(Account account);
 
 void show_commissions(const Account account);
@@ -112,7 +116,7 @@ void structure_details(const Account account);
 
 bool redeem_points(Account account, Amount amount);
 
-void length_of_all_strings(String strings[], int *length);
+void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);
 
 Account get_account_by_id(const ID id);

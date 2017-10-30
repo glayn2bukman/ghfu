@@ -135,11 +135,8 @@ int main()
     };
 
     /* now auto-refill for all investments for one entire season/year */
-    for(int i=0; i<12;++i) auto_refill(NULL, monhtly_auto_refill_percentages[i]);
+    //for(int i=0; i<12;++i) auto_refill(NULL, monhtly_auto_refill_percentages[i]);
 
-
-    printf("SYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
-    
     /*
     calculate_tvc(NULL);
     Account investor8 = register_member(brocker1, "Investor 8",
@@ -150,7 +147,7 @@ int main()
     structure_details(NULL);
     */
     
-    structure_details(get_account_by_id(6));
+    printf("SYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
     return 0;
 }

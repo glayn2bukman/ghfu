@@ -1,8 +1,8 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 27 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
-#define TVC_DAY 27 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define TVC_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40.0 /* $ */
@@ -37,6 +37,44 @@ char *ACCOUNTS[] = {
     "Saphire",
     "Ruby",
     "Diamond"
+};
+
+char *RANKS[] = {
+    /*0*/ "Independent Brocker",
+    /*1*/ "Consultant",
+    /*2*/ "Junior Manager",
+    /*3*/ "Manager",
+    /*4*/ "Senior Manager",
+    /*5*/ "Director",
+    /*6*/ "Senior Director",
+    /*7*/ "Executive Director",
+    /*8*/ "Senior Executive Director",
+    /*9*/ "Presidential Director",
+    /*10*/ "Senior Presidential Director",
+    /*11*/ "Crown",
+    /*12*/ "\0", /* termination condition*/
+};
+
+float RANK_DETAILS[][7] = {
+    /* volumes required to reach a certain rank. order;
+        the three leg ranks, annual-minimum-PV, cummulative-organisation-volume, 
+        cummulative-lesser-leg-volume, director's recorgnition award
+         
+    */
+    /*0*/  {0,0,0,    0,0,0,             0},
+    /*1*/  {0,0,0,    100,500,100,       0},
+    /*2*/  {1,1,1,    100,2000,500,      0},
+    /*3*/  {2,2,2,    100,5000,2000,     0},
+    /*4*/  {3,3,3,    100,15000,5000,    0},
+    /*5*/  {4,4,4,    200,50000,15000,   500},
+    /*6*/  {5,5,5,    200,200000,50000,  1000},
+    /*7*/  {6,6,5,    200,500000,200000, 2500},
+    /*8*/  {7,7,5,    200,0,0,           6000},
+    /*9*/  {8,8,5,    0,0,0,             15000},
+    /*10*/ {9,9,5,    0,0,0,             25000},
+    /*11*/ {10,10,5,  0,0,0,             50000},
+    
+    /*12*/ {0,0,0,    1,1,1,             0} /* terminating condition */
 };
 
 /* commission/bonus ranges (all amounts in points NOT $)*/
