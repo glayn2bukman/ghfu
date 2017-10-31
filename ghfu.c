@@ -7,24 +7,27 @@
 
 /* function definitions */
 
-void memerror()
+void memerror(FILE *fout)
 {
-    ghfu_warn(0);
+    ghfu_warn(0,fout);
 
     /* dump all data to file here (dont overwrite files, always create new files everytime you dump)*/
 
     exit(1); /* is exiting the right choice? if so, please first dump all data to file*/
 }
 
-void init()
+void init(String fout_name)
 {
     /* Should first destroy any open structures such as HEAD n TAIL, etc n reset all global values.
        If there is a stored structure file, load that instead and then set al necessary variables
        accordingly
     */
+
+    FILE *fout = fopen(fout_name, "w");
+
     HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
 
-    if(HEAD==NULL) memerror();
+    if(HEAD==NULL) memerror(fout);
 
     HEAD->account = NULL;
     HEAD->next = NULL;
@@ -40,14 +43,14 @@ void init()
     CURRENT_ID = 0; /* only increments, never the opposite */
 }
 
-void increment_pv(Account account, const Amount points)
+void increment_pv(Account account, const Amount points, FILE *fout)
 {
     /* this function ensures that all PV increments anss rank updates in a certain line of sucession
        occur are updated all at one when a PV changes. this in turn means that the web-API that calls
        for information never delays because the data is not calculated/determined at calling time but
        rather is updated and made readily available any time the web-API needs it 
     */
-    if(account==NULL){ghfu_warn(7); return;}
+    if(account==NULL){ghfu_warn(7,fout); return;}
     account->pv += points;
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
@@ -62,7 +65,7 @@ void increment_pv(Account account, const Amount points)
     
     while(acc!=NULL)
     {
-        raise_rank(acc);
+        raise_rank(acc, fout);
 
         highest_rank = acc->highest_leg_ranks[0];
         for(i=1;i<3;++i)
@@ -111,13 +114,13 @@ void increment_pv(Account account, const Amount points)
     
 }
 
-void award_commission(Account account, Amount points, String commission_type, String reason)
+void award_commission(Account account, Amount points, String commission_type, String reason, FILE *fout)
 {
-    if(!points){ghfu_warn(8); return;}
-    if(account==NULL) {printf("could not award commissions for NULL account!\n"); return;}
+    if(!points){ghfu_warn(8,fout); return;}
+    if(account==NULL) {fprintf(fout,"could not award commissions for NULL account!\n"); return;}
     
     Commission new_commission = (Commission)malloc(sizeof(struct commission));
-    if(new_commission==NULL) memerror();
+    if(new_commission==NULL) memerror(fout);
 
     new_commission->reason = NULL;
     new_commission->amount = 0;
@@ -197,7 +200,7 @@ void award_commission(Account account, Amount points, String commission_type, St
                 last_commission = uplink->last_commission;
 
                 uplink->last_commission = (Commission)malloc(sizeof(struct commission));
-                if(uplink->last_commission==NULL) memerror();
+                if(uplink->last_commission==NULL) memerror(fout);
 
                 uplink->last_commission->reason = NULL;
                 uplink->last_commission->amount = p_comm;
@@ -217,7 +220,7 @@ void award_commission(Account account, Amount points, String commission_type, St
                    new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                    EXITS, THE POINTER WILL BE ANONYMOUS!)*/
                 uplink->last_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-                if(uplink->last_commission->reason==NULL) memerror();
+                if(uplink->last_commission->reason==NULL) memerror(fout);
                 join_strings(uplink->last_commission->reason, reason_strings);
                 
                 if(uplink->commissions==NULL){ uplink->commissions = uplink->last_commission; }
@@ -249,7 +252,7 @@ void award_commission(Account account, Amount points, String commission_type, St
            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-        if(new_commission->reason==NULL) memerror();
+        if(new_commission->reason==NULL) memerror(fout);
         join_strings(new_commission->reason,reason_strings);
 
         new_commission->amount = p_comm;
@@ -268,26 +271,37 @@ void award_commission(Account account, Amount points, String commission_type, St
             account->last_commission = new_commission;
         }
 
-        if(update_pv) increment_pv(account,points);
+        if(update_pv) increment_pv(account,points, fout);
 
         CUMULATIVE_COMMISSIONS += p_comm;
         COMMISSIONS += p_comm;
     }
 }
 
-bool invest_money(Account account, Amount amount, String package, ID package_id, bool update_system_float)
+bool invest(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name)
 {
-    if(account==NULL) {printf("could not create investment for NULL account!\n"); return false;}
+    /*python/java/etc interface to invest_money*/
+    FILE *fout = fopen(fout_name, "w");
+    bool invested = invest_money(account,amount, package, package_id, update_system_float, fout);
+
+    fclose(fout);
+    
+    return invested;
+}
+
+bool invest_money(Account account, Amount amount, String package, ID package_id, bool update_system_float, FILE *fout)
+{
+    if(account==NULL) {fprintf(fout,"could not create investment for NULL account!\n"); return false;}
 
     amount -= OPERATIONS_FEE;
-    if(amount<0){ printf("failed to invest for <%s>...", account->names); ghfu_warn(4); return false; }
-    if(!amount){ printf("failed to invest for <%s>...", account->names); ghfu_warn(5); return false; }
-    if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(6); return false; }
-    if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(9); return false; }
+    if(amount<0){ printf("failed to invest for <%s>...", account->names); ghfu_warn(4,fout); return false; }
+    if(!amount){ printf("failed to invest for <%s>...", account->names); ghfu_warn(5,fout); return false; }
+    if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(6,fout); return false; }
+    if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(9,fout); return false; }
 
     Investment new_investment = (Investment)malloc(sizeof(struct investment));
     
-    if(new_investment==NULL) memerror();
+    if(new_investment==NULL) memerror(fout);
 
     Amount points = amount*POINT_FACTOR;
     
@@ -317,22 +331,35 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
     if(update_system_float) SYSTEM_FLOAT += amount;
 
-    increment_pv(account, points);
+    increment_pv(account, points, fout);
 
     return true; /* leave this out and you have memory leaks when invest money is called from regiter_member*/
 }
 
-Account register_member(Account uplink, String names, Amount amount)
+ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name)
+{
+    /* python/java/etc interface to register_member */
+    FILE *fout = fopen(fout_name,"w");
+
+    /* if return value==0, error occured, otherwise, new account ID is returned */
+    ID new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
+    
+    fclose(fout);
+    
+    return new_id;
+}
+
+Account register_member(Account uplink, String names, Amount amount, FILE *fout)
 {
     /* if this function returns NULL, DONT USE RESULT (it indicates an error, more like malloc)*/
     if(amount<(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))
-        { printf("failed to add <%s>...",names); ghfu_warn(1); return NULL; }
+        { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(1,fout); return NULL; }
     if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
-        { printf("failed to add <%s>...",names); ghfu_warn(9); return NULL; }
+        { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(9,fout); return NULL; }
 
     Account new_account = (Account)malloc(sizeof(struct account));
     
-    if(new_account==NULL) memerror();
+    if(new_account==NULL) memerror(fout);
 
     new_account->id = CURRENT_ID+1;
     new_account->names = names;
@@ -381,7 +408,7 @@ Account register_member(Account uplink, String names, Amount amount)
         if(ap==NULL)
         {
             gfree(new_account); /* you dont want memory leaks, trust me */
-            memerror();
+            memerror(fout);
         }
         
         ap->account = new_account;
@@ -401,12 +428,12 @@ Account register_member(Account uplink, String names, Amount amount)
             char buff[buff_length+1];
             join_strings(buff,reason_strings);
 
-            award_commission(uplink, points, "FSB",buff);
+            award_commission(uplink, points, "FSB",buff, fout);
         }
     }
     else {gfree(ap1); /* you dont want memory leaks, trust me */ }
 
-    if(points) award_commission(new_account, points,"TBB","");
+    if(points) award_commission(new_account, points,"TBB","", fout);
 
     /* add new node to linear structure of all nodes */
     AccountPointer ap = (AccountPointer)malloc(sizeof(struct account_pointer));
@@ -416,7 +443,19 @@ Account register_member(Account uplink, String names, Amount amount)
         if(uplink!=NULL) gfree(ap1);
         gfree(new_account);
         
-        memerror();
+        memerror(fout);
+    }
+
+
+
+    /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
+       because invest_money calls incrememt_pv which needs to call children of uplinks)*/
+    if(points && !invest_money(new_account, amount, "Investment", 0, false, fout))
+    {
+        if(uplink!=NULL) gfree(ap1);
+        gfree(ap);
+        gfree(new_account);
+        return NULL;
     }
 
     ap->account = new_account;
@@ -424,14 +463,9 @@ Account register_member(Account uplink, String names, Amount amount)
 
     if(HEAD->next==NULL) { ap->prev = HEAD; HEAD->next = ap; }
     else { ap->prev = TAIL; TAIL->next = ap; }
-
+    
     TAIL = ap;
 
-    /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
-       because invest_money calls incrememt_pv which needs to call children of uplinks)*/
-    if(points)
-        invest_money(new_account, amount, "Investment", 0, false);
-    
     /* update system float */
     SYSTEM_FLOAT += _amount;
 
@@ -440,7 +474,7 @@ Account register_member(Account uplink, String names, Amount amount)
     return new_account;
 }
 
-void buy_property(Account IB_account, Amount amount, bool member, String buyer_names)
+void buy_property(Account IB_account, Amount amount, bool member, String buyer_names, FILE *fout)
 {
     /* if member(IV or registered investor), get IBC and those points otherwise just add this amount to 
        the system total float */
@@ -448,7 +482,7 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     
     if(!member){SYSTEM_FLOAT += amount; return;}
     
-    if(IB_account==NULL){ghfu_warn(3); return;}
+    if(IB_account==NULL){ghfu_warn(3,fout); return;}
 
     /* create reason for the commission */
     String reason_strings[] = {"IBC from ",buyer_names,"\0"};
@@ -457,12 +491,21 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     char reason[buff_length+1];
     join_strings(reason,reason_strings);
 
-    award_commission(IB_account, points, "IBC", reason);
+    award_commission(IB_account, points, "IBC", reason,fout);
 
     SYSTEM_FLOAT += amount;
 }
 
-void auto_refill(Account account, float percentages[][2])
+void purchase_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, String fout_name)
+{
+    /* python/java/etc interface to buy_property*/
+    FILE *fout = fopen(fout_name, "w");
+    buy_property(IB_account,amount,member,buyer_names,fout);
+    
+    fclose(fout);
+}
+
+void auto_refill(Account account, float percentages[][2], FILE *fout)
 {
     /* if account==NULL, calculate autp-refills for all investments in the system otherwise, 
        calculate auto-refill for only that account's investments 
@@ -476,7 +519,7 @@ void auto_refill(Account account, float percentages[][2])
     time_t t; time(&t);
     struct tm *today = localtime(&t);
 
-    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12); return;}
+    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12,fout); return;}
 
     Commission new_commission;
     Investment inv;
@@ -502,11 +545,11 @@ void auto_refill(Account account, float percentages[][2])
                     
                     returns = (inv->amount)*(percentages[i][1])*.01;
 
-                    if(!percentages[i][0]) ghfu_warn(13);
+                    if(!percentages[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = (Commission)malloc(sizeof(struct commission));
-                        if(new_commission==NULL) memerror();
+                        if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -538,7 +581,7 @@ void auto_refill(Account account, float percentages[][2])
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
                         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
                         ++(inv->months_returned);
@@ -580,11 +623,11 @@ void auto_refill(Account account, float percentages[][2])
                     
                     returns = (inv->amount)*(percentages[i][1])*.01;
 
-                    if(!percentages[i][0]) ghfu_warn(13);
+                    if(!percentages[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = (Commission)malloc(sizeof(struct commission));
-                        if(new_commission==NULL) memerror();
+                        if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -616,7 +659,7 @@ void auto_refill(Account account, float percentages[][2])
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
                         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
                         ++(inv->months_returned);
@@ -638,7 +681,7 @@ void auto_refill(Account account, float percentages[][2])
     }
 }
 
-bool raise_rank(Account account)
+bool raise_rank(Account account, FILE *fout)
 {
     /* if true; award onetime Director's recorgintion award...
        however, the award is in such a way that its descrete ie if one leaps
@@ -687,14 +730,14 @@ bool raise_rank(Account account)
     char buff[buff_length+1];
     join_strings(buff,reason_strings);
     
-    if(RANK_DETAILS[rank][6]) award_commission(account, RANK_DETAILS[rank][6], "DRA", buff);
+    if(RANK_DETAILS[rank][6]) award_commission(account, RANK_DETAILS[rank][6], "DRA", buff, fout);
     
     account->rank = rank;
     
     return rank_raised;
 }
 
-void calculate_tvc(Account account)
+void calculate_tvc(Account account, FILE *fout)
 {
     /* this function should be called only once a month on the agreed day */
 
@@ -704,7 +747,7 @@ void calculate_tvc(Account account)
     time_t t; time(&t);
     struct tm *today = localtime(&t);
 
-    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15); return;}
+    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15,fout); return;}
 
     Amount lower_leg_volume, actual_lower_leg_volume, returns;
     unsigned int i, j, buff_length; /* i is used for getting the lower_leg_volume, while j is used to
@@ -755,7 +798,7 @@ void calculate_tvc(Account account)
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
                         new_commission = (Commission)malloc(sizeof(struct commission));
-                        if(new_commission==NULL) memerror();
+                        if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -786,7 +829,7 @@ void calculate_tvc(Account account)
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
                         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
                         account->available_balance += returns;
@@ -798,7 +841,7 @@ void calculate_tvc(Account account)
             }
         }
         
-        /* else{printf("not TVC for <%s>...",account->names); ghfu_warn(14);} */
+        /* else{fprintf(fout,"not TVC for <%s>...",account->names); ghfu_warn(14,fout);} */
         
         return;
     }
@@ -849,7 +892,7 @@ void calculate_tvc(Account account)
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
                         new_commission = (Commission)malloc(sizeof(struct commission));
-                        if(new_commission==NULL) memerror();
+                        if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -880,7 +923,7 @@ void calculate_tvc(Account account)
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
                         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-                        if(new_commission->reason==NULL) {gfree(new_commission); memerror();}
+                        if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
                         acc->available_balance += returns;
@@ -896,7 +939,7 @@ void calculate_tvc(Account account)
     }
 }
 
-void award_rank_monthly_bonuses(Account account)
+void award_rank_monthly_bonuses(Account account, FILE *fout)
 {
     Amount lower_leg_volume, actual_lower_leg_volume;
     unsigned int i;
@@ -916,11 +959,11 @@ void award_rank_monthly_bonuses(Account account)
             
             if(actual_lower_leg_volume)
             {
-                award_commission(account, actual_lower_leg_volume, "HOB", "HOB");
+                award_commission(account, actual_lower_leg_volume, "HOB", "HOB",fout);
                 if(account->rank>=8)
                 {
-                    award_commission(account, actual_lower_leg_volume, "LCB", "LCB");
-                    award_commission(account, actual_lower_leg_volume, "EAB", "EA bonus");
+                    award_commission(account, actual_lower_leg_volume, "LCB", "LCB",fout);
+                    award_commission(account, actual_lower_leg_volume, "EAB", "EA bonus",fout);
                 }
             }
         }
@@ -948,11 +991,11 @@ void award_rank_monthly_bonuses(Account account)
             
             if(actual_lower_leg_volume)
             {
-                award_commission(acc, actual_lower_leg_volume, "HOB", "HOB");
+                award_commission(acc, actual_lower_leg_volume, "HOB", "HOB",fout);
                 if(acc->rank>=8)
                 {
-                    award_commission(acc, actual_lower_leg_volume, "LCB", "LCB");
-                    award_commission(acc, actual_lower_leg_volume, "EAB", "EA bonus");
+                    award_commission(acc, actual_lower_leg_volume, "LCB", "LCB",fout);
+                    award_commission(acc, actual_lower_leg_volume, "EAB", "EA bonus",fout);
                 }
             }
         }
@@ -1324,19 +1367,30 @@ bool dump_structure_details(const Account account, String fname)
     return true;
 }
 
-bool redeem_points(Account account, Amount amount)
+bool redeem_points(Account account, Amount amount, FILE *fout)
 {
     /* if this function returns true but the money actually is'nt redeemed for some reason (loss in
        network for example or when the mobile money API is down), please REVERSE this operation or the 
        member will actually lose their returns permanently! 
     */
-    if(account==NULL){ghfu_warn(11); return false;}
-    if(amount>(account->available_balance)){ghfu_warn(10); return false;}
+    if(account==NULL){ghfu_warn(11,fout); return false;}
+    if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
 
     account->available_balance -= amount;
     account->total_redeems += amount;
 
     return true;
+}
+
+bool redeem_account_points(Account account, Amount amount, String fout_name)
+{
+    /* python/java/etc interface to redeem_points */
+    FILE *fout = fopen(fout_name, "w");
+    bool redeemed = redeem_points(account, amount, fout);
+
+    fclose(fout);
+
+    return redeemed;
 }
 
 void length_of_all_strings(String strings[], unsigned int *length)
@@ -1399,17 +1453,34 @@ Account get_account_by_id(const ID id)
     return acc_p==NULL ? NULL : (Account)(acc_p->account); /*if return is NULL, that account was deleted*/
 }
 
-void monthly_operations(float auto_refill_percentages[4][2])
+ID account_id(Account account)
 {
-    /* perform all monthly operations */
-    auto_refill(NULL, auto_refill_percentages);
-    calculate_tvc(NULL);
-    award_rank_monthly_bonuses(NULL);
+    if(account==NULL) return 0;
+    return account->id;
 }
 
-void ghfu_warn(unsigned int ghfu_errno)
+void monthly_operations(float auto_refill_percentages[4][2], FILE *fout)
 {
-    printf("\033[33m%s\033[0m\n",ERRORS[ghfu_errno]);
+
+    /* perform all monthly operations */
+    auto_refill(NULL, auto_refill_percentages,fout);
+    calculate_tvc(NULL,fout);
+    award_rank_monthly_bonuses(NULL, fout);
+}
+void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name)
+{
+    /* python/java/etc interface to monthly_operations */
+    FILE *fout = fopen(fout_name, "w");
+    monthly_operations(auto_refill_percentages, fout);
+    
+    fclose(fout);
+}
+
+void ghfu_warn(unsigned int ghfu_errno, FILE *fout)
+{
+    if(fout==stdin)
+        fprintf(fout, "\033[33m%s\033[0m\n",ERRORS[ghfu_errno]);
+    fprintf(fout, "%s\n",ERRORS[ghfu_errno]);    
 }
 
 void gfree(void *p)
@@ -1418,3 +1489,4 @@ void gfree(void *p)
     free(p);
     p = NULL;
 }
+

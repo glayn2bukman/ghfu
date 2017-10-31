@@ -97,18 +97,21 @@ ID ACTIVE_ACCOUNTS, CURRENT_ID;
 AccountPointer HEAD, TAIL;
 
 /* function prototypes */
-void memerror();
-void init();
-void increment_pv(Account account, const Amount points);
-void award_commission(Account account, const Amount points, const String commission_type, String reason);
-bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float);
-Account register_member(Account uplink, String names, Amount amount);
+void memerror(FILE *fout);
+void init(String fout_name);
+void increment_pv(Account account, const Amount points, FILE *fout);
+void award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
+bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, FILE *fout);
+bool invest(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name);
+Account register_member(Account uplink, String names, Amount amount, FILE *fout);
+ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 
-void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names);
-void auto_refill(Account account, float percentages[][2]);
-bool raise_rank(Account account);
-void calculate_tvc(Account account);
-void award_rank_monthly_bonuses(Account account);
+void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, FILE *fout);
+void purchase_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, String fout_name);
+void auto_refill(Account account, float percentages[][2], FILE *fout);
+bool raise_rank(Account account, FILE *fout);
+void calculate_tvc(Account account, FILE *fout);
+void award_rank_monthly_bonuses(Account account, FILE *fout);
 
 /* functions to visually display accounts */
 void show_commissions(const Account account);
@@ -122,17 +125,20 @@ void dump_commissions(const Account account, FILE *fout);
 void dump_leg_volumes(const Account account, FILE *fout);
 void dump_investments(const Account account, FILE *fout);
 void dump_direct_children(const Account account, FILE *fout);
-bool dump_structure_details(const Account account, String fout_path); 
+bool dump_structure_details(const Account account, String fout_name); 
 
-bool redeem_points(Account account, Amount amount);
+bool redeem_points(Account account, Amount amount, FILE *fout);
+bool redeem_account_points(Account account, Amount amount, String fout_path);
 
 void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);
 
 Account get_account_by_id(const ID id);
+ID account_id(Account account);
 
-void monthly_operations(float auto_refill_percentages[4][2]);
+void monthly_operations(float auto_refill_percentages[4][2], FILE *fout);
+void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
 
-void ghfu_warn(unsigned int ghfu_errno);
+void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
 void gfree(void *p);
 

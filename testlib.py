@@ -1,15 +1,34 @@
-import json
+# the most important interfaces to the dynamic library (libjermGHFU.so) are;
+#   ID account_id(Account account);
+#   bool dump_structure_details(const Account account, String fout_name); 
+#   Account get_account_by_id(const ID id);
+#   ID account_id(Account account);
+#   bool invest(Account account, const Amount amount, const String package, 
+#        const ID package_id, const bool update_system_float, String fout_name);
+#   void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
+#   void purchase_property(Account IB_account, const Amount amount, const bool member, 
+#        const String buyer_names, String fout_name);
+#   bool redeem_account_points(Account account, Amount amount, String fout_path);
+#   ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
+
+#   NB: String is defined as (char *) in ghfu.c. bool is defined as (enum bool {false, true})
+
+import sys, json
 from ctypes import *
 ghfu = CDLL("lib/libjermGHFU.so")
 jermCrypt = CDLL("lib/libjermCrypt.so")
 #jermCrypt.encrypt_file(fin,pswd,fout,int overwrite,int verbose)
 #jermCrypt.decrypt_file(fin,pswd,fout,int overwrite,int verbose)
 
-ghfu.init()
+ghfu.init("files/out/test-init")
 
-ghfu.register_member(None, "brocker 1", c_float(10+40)) # ID=1, if account is registered successully
+with open("files/out/test-init","r") as f: 
+    error = f.read()
+    if error:sys.exit(error)
 
-ghfu.register_member(ghfu.get_account_by_id(1), "investor 1", c_float(10+40+180+958))
+id1 = ghfu.register_new_member(None, "brocker 1", c_float(10+40), "files/out/test-b1") # ID=1, if account is registered successully
+
+id2 = ghfu.register_new_member(id1, "investor 1", c_float(10+40+180+958), "files/out/test-i1")
 
 ghfu.invest_money(ghfu.get_account_by_id(1), c_float(40+10+180+1450), "First Package",2,1); # ID=2
 
@@ -46,9 +65,12 @@ monhtly_auto_refill_percentages = m_a_r_p(
 for monthly_percentage in monhtly_auto_refill_percentages:
     ghfu.monthly_operations(monthly_percentage)
 
-if ghfu.dump_structure_details(ghfu.get_account_by_id(1), "1.json"):
-    print "account data:",json.JSONDecoder().decode(open("1.json","r").read())
+if ghfu.dump_structure_details(ghfu.get_account_by_id(1), "files/json/1.json"):
+    print "account data:",json.JSONDecoder().decode(open("files/json/1.json","r").read())
 else: print "failed to dump account details to file!"
 
 print "\nsystem float =$%.2f, total commissions = $%.2f"%( c_float.in_dll(ghfu, "SYSTEM_FLOAT").value,
       c_float.in_dll(ghfu, "CUMULATIVE_COMMISSIONS").value)
+
+c_char_p.in_dll(ghfu,"ACCOUNTS").value = "hello, world"
+print c_char_p.in_dll(ghfu,"ACCOUNTS").value[:]

@@ -10,6 +10,13 @@
 #define MINIMUM_INVESTMENT 500.0 /* 125 points */
 #define MAXIMUM_INVESTMENT 1500.0 /* 375 points */
 
+/* formally declare these values to be accessed in other language adaptors from the dynamic-lib*/
+float ACF = ACCOUNT_CREATION_FEE;
+float ASF = ANNUAL_SUBSCRIPTION_FEE;
+float OF = OPERATIONS_FEE;
+float MinI = MINIMUM_INVESTMENT;
+float MaxI = MAXIMUM_INVESTMENT;
+
 /* program errors */
 char *ERRORS[] = {
     /*0*/ "MALLOC FAILED TO ALOCATE SPACE",
