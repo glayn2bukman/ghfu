@@ -1,17 +1,18 @@
 # the most important interfaces to the dynamic library (libjermGHFU.so) are;
 #   ID account_id(Account account);
-#   bool dump_structure_details(const Account account, String fout_name); 
+#   bool dump_structure_details(ID account_id, String fout_name); 
 #   Account get_account_by_id(const ID id);
 #   ID account_id(Account account);
-#   bool invest(Account account, const Amount amount, const String package, 
+#   bool invest(ID account_id, const Amount amount, const String package, 
 #        const ID package_id, const bool update_system_float, String fout_name);
 #   void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
-#   void purchase_property(Account IB_account, const Amount amount, const bool member, 
+#   void purchase_property(ID IB_account_id, const Amount amount, const bool member, 
 #        const String buyer_names, String fout_name);
-#   bool redeem_account_points(Account account, Amount amount, String fout_path);
+#   bool redeem_account_points(ID account_id, Amount amount, String fout_path);
 #   ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 
-#   NB: String is defined as (char *) in ghfu.c. bool is defined as (enum bool {false, true})
+#   NB: String is defined as (char *) in ghfu.c. bool is defined as (enum bool {false, true}),
+#       ID is defined as (unsigned long)
 
 import sys, json
 from ctypes import *
@@ -30,7 +31,7 @@ id1 = ghfu.register_new_member(None, "brocker 1", c_float(10+40), "files/out/tes
 
 id2 = ghfu.register_new_member(id1, "investor 1", c_float(10+40+180+958), "files/out/test-i1")
 
-ghfu.invest_money(ghfu.get_account_by_id(1), c_float(40+10+180+1450), "First Package",2,1); # ID=2
+ghfu.invest(id1, c_float(40+10+180+1450), "First Package",2,1); # ID=2
 
 # create monthly %s for auto-refill...
 m_a_r_p = ((c_float*2)*4)*12 # 12 arrays, each with 4 items each in turn with 2-items
@@ -65,7 +66,7 @@ monhtly_auto_refill_percentages = m_a_r_p(
 for monthly_percentage in monhtly_auto_refill_percentages:
     ghfu.monthly_operations(monthly_percentage)
 
-if ghfu.dump_structure_details(ghfu.get_account_by_id(1), "files/json/1.json"):
+if ghfu.dump_structure_details(id1, "files/json/1.json"):
     print "account data:",json.JSONDecoder().decode(open("files/json/1.json","r").read())
 else: print "failed to dump account details to file!"
 

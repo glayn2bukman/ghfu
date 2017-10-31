@@ -102,12 +102,12 @@ void init(String fout_name);
 void increment_pv(Account account, const Amount points, FILE *fout);
 void award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
 bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, FILE *fout);
-bool invest(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name);
+bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name);
 Account register_member(Account uplink, String names, Amount amount, FILE *fout);
 ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 
 void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, FILE *fout);
-void purchase_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, String fout_name);
+void purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name);
 void auto_refill(Account account, float percentages[][2], FILE *fout);
 bool raise_rank(Account account, FILE *fout);
 void calculate_tvc(Account account, FILE *fout);
@@ -125,10 +125,10 @@ void dump_commissions(const Account account, FILE *fout);
 void dump_leg_volumes(const Account account, FILE *fout);
 void dump_investments(const Account account, FILE *fout);
 void dump_direct_children(const Account account, FILE *fout);
-bool dump_structure_details(const Account account, String fout_name); 
+bool dump_structure_details(ID account_id, String fout_name); 
 
 bool redeem_points(Account account, Amount amount, FILE *fout);
-bool redeem_account_points(Account account, Amount amount, String fout_path);
+bool redeem_account_points(ID account_id, Amount amount, String fout_path);
 
 void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);

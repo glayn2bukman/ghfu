@@ -278,9 +278,12 @@ void award_commission(Account account, Amount points, String commission_type, St
     }
 }
 
-bool invest(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name)
+bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name)
 {
     /*python/java/etc interface to invest_money*/
+
+    Account account = get_account_by_id(account_id);
+
     FILE *fout = fopen(fout_name, "w");
     bool invested = invest_money(account,amount, package, package_id, update_system_float, fout);
 
@@ -452,7 +455,14 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
        because invest_money calls incrememt_pv which needs to call children of uplinks)*/
     if(points && !invest_money(new_account, amount, "Investment", 0, false, fout))
     {
-        if(uplink!=NULL) gfree(ap1);
+        if(uplink!=NULL)
+        {
+            if(uplink->children==uplink->last_child)
+                {uplink->children=NULL; uplink->last_child=uplink->children;}
+            else
+                {uplink->last_child = uplink->last_child->prev; uplink->last_child->next=NULL;}
+            gfree(ap1);
+        }
         gfree(ap);
         gfree(new_account);
         return NULL;
@@ -496,9 +506,11 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     SYSTEM_FLOAT += amount;
 }
 
-void purchase_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, String fout_name)
+void purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name)
 {
     /* python/java/etc interface to buy_property*/
+    Account IB_account = get_account_by_id(IB_account_id);
+
     FILE *fout = fopen(fout_name, "w");
     buy_property(IB_account,amount,member,buyer_names,fout);
     
@@ -1330,12 +1342,14 @@ void structure_details(const Account account)
     
 }
 
-bool dump_structure_details(const Account account, String fname)
+bool dump_structure_details(ID account_id, String fname)
 {
     /* this function creates a json file describing the account in all its detail. the json is then sent
        to the web API requesting for the account information
        fname is a full path to the output json file
     */
+
+    Account account = get_account_by_id(account_id);
 
     if(account==NULL) return false;
 
@@ -1382,9 +1396,11 @@ bool redeem_points(Account account, Amount amount, FILE *fout)
     return true;
 }
 
-bool redeem_account_points(Account account, Amount amount, String fout_name)
+bool redeem_account_points(ID account_id, Amount amount, String fout_name)
 {
     /* python/java/etc interface to redeem_points */
+
+    Account account = get_account_by_id(account_id);
     FILE *fout = fopen(fout_name, "w");
     bool redeemed = redeem_points(account, amount, fout);
 
@@ -1467,6 +1483,7 @@ void monthly_operations(float auto_refill_percentages[4][2], FILE *fout)
     calculate_tvc(NULL,fout);
     award_rank_monthly_bonuses(NULL, fout);
 }
+
 void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name)
 {
     /* python/java/etc interface to monthly_operations */

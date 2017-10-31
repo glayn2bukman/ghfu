@@ -38,8 +38,8 @@ int main()
         10+40+180+(500*1.46),stdout
     );
     Account investor7 = register_member(brocker1, "Investor 7",
-        10+40+180+(500*2.46),stdout
-    );
+        180,stdout
+    ); /* not supposed to be added...investment scheme will complain */
 
 
     invest_money(brocker1, 40+10+180+1450, "First Package",2,true, stdout);
@@ -81,7 +81,9 @@ int main()
         
     //printf("\nSYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
-    printf("dumped data? %s\n", dump_structure_details(brocker1, "files/json/brocker1.json") ? "yes" : "no");
+    printf("dumped data? %s\n", dump_structure_details(brocker1->id, "files/json/brocker1.json") ? "yes" : "no");
+    
+    //structure_details(NULL);
     
     return 0;
 }
