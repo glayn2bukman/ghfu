@@ -1,3 +1,4 @@
+import json
 from ctypes import *
 ghfu = CDLL("lib/libjermGHFU.so")
 jermCrypt = CDLL("lib/libjermCrypt.so")
@@ -45,7 +46,9 @@ monhtly_auto_refill_percentages = m_a_r_p(
 for monthly_percentage in monhtly_auto_refill_percentages:
     ghfu.monthly_operations(monthly_percentage)
 
-ghfu.structure_details(None)
+if ghfu.dump_structure_details(ghfu.get_account_by_id(1), "1.json"):
+    print "account data:",json.JSONDecoder().decode(open("1.json","r").read())
+else: print "failed to dump account details to file!"
 
 print "\nsystem float =$%.2f, total commissions = $%.2f"%( c_float.in_dll(ghfu, "SYSTEM_FLOAT").value,
       c_float.in_dll(ghfu, "CUMULATIVE_COMMISSIONS").value)

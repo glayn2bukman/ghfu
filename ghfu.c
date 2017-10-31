@@ -1000,23 +1000,26 @@ void show_commissions(Account account)
 
 void dump_commissions(const Account account, FILE *fout)
 {
-    /* fout is a file containing sqlite3 commands to create and save the account data */
-    /* the commissions table columns in the db are as follows;
-            amount float, reason text
-       the tablename is "commissions"
-    */
+    /* dump commissions to json file */
     Commission c;
     
     if (account!=NULL)
     {
         c = account->commissions;
-        if(c==NULL) return;
+        fprintf(fout, ",\"commissions\": [");
 
+        bool started=false;
         while(c!=NULL)
         {
-            fprintf(fout,"insert into %s values(%.2f, \"%s\");\n",DB_INSTRUCTIONS[2][0],c->amount, c->reason);
+            if(started) fprintf(fout,",");
+            started = started ? started : true;
+            fprintf(fout,"[%.2f,\"%s\"]",c->amount, c->reason);
             c=c->next;
-        }        
+            
+        }
+        
+        fprintf(fout, "]");
+    
     }
 }
 
@@ -1049,14 +1052,10 @@ void show_leg_volumes(Account account)
 
 void dump_leg_volumes(const Account account, FILE *fout)
 {
-    /* fout is a file containing sqlite3 commands to create and save the account data */
-    /* the leg_volumes table columns in the db are as follows;
-            leg_one_volume float, leg_two_volume float, leg_three_volume float
-       the tablename is "leg_volumes"
-    */
+    /* dump leg volumes to json file */
     if(account!=NULL)
     {
-        fprintf(fout, "insert into %s values(%.2f,%.2f,%.2f);\n", DB_INSTRUCTIONS[4][0],
+        fprintf(fout, ",\"leg_volumes\":[%.2f,%.2f,%.2f]",
             account->leg_volumes[0], account->leg_volumes[1], account->leg_volumes[2]);
     }
 }
@@ -1126,29 +1125,30 @@ void show_investments(const Account account)
 
 void dump_investments(const Account account, FILE *fout)
 {
-    /* fout is a file containing sqlite3 commands to create and save the account data */
-    /* the investmentss table columns in the db are as follows;
-            data varchar(20), points float, package text, months_returned int
-       the tablename is "in investments"
-    */
+    /* dump investments to json file */
     Investment inv;
     struct tm *lt;
     if(account!=NULL)
     {
         inv = account->investments;
 
-        if(inv==NULL) printf("    None\n");
+        fprintf(fout, ",\"investments\":[");
         
+        bool started = false;
         while(inv!=NULL)
         {
+            if(started) fprintf(fout, ",");
+            started = started ? started : true;
+
             lt = localtime(&(inv->date));
-            fprintf(fout, "insert into %s values(\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%d);\n",
-                DB_INSTRUCTIONS[1][0],
+
+            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%d]",
                 lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
                 inv->amount,inv->package,inv->months_returned);
             inv = inv->next;            
         }
-        return;
+
+        fprintf(fout, "]");
     }
 
 }
@@ -1209,11 +1209,7 @@ void show_direct_children(const Account account)
 
 void dump_direct_children(const Account account, FILE *fout)
 {
-    /* fout is a file containing sqlite3 commands to create and save the account data */
-    /* the direct_children table columns in the db are as follows;
-            names varchar(100) 
-       the tablename is "direct_children"
-    */
+    /* dump account direct children to json file */
     AccountPointer acc_p;
     Account acc;
 
@@ -1221,17 +1217,21 @@ void dump_direct_children(const Account account, FILE *fout)
     {
         acc_p = account->children;
         
-        if(acc_p==NULL) return;
+        fprintf(fout, ",\"direct_children\":[");
+        
 
+        bool started = false;
         while(acc_p!=NULL)
         {
+            if(started) fprintf(fout, ",");
+            started = started ? started : true;
             acc = acc_p->account;
-            fprintf(fout,"insert into %s values(\"%s\");\n",DB_INSTRUCTIONS[3][0],acc->names); 
+            fprintf(fout,"\"%s\"",acc->names); 
 
             acc_p=acc_p->next; 
         }
 
-        return;
+        fprintf(fout, "]");
     }
 }
 
@@ -1287,64 +1287,23 @@ void structure_details(const Account account)
     
 }
 
-bool dump_structure_details(const Account account, String fout_path)
+bool dump_structure_details(const Account account, String fname)
 {
-    /* this function creates a file containint instructions needed to dump a single account information
-       to an sqlite3 file to be read by a different API (called from python for example)
-       the new db is in the format;
-       
-       db-name: account->id
-       tables:
-            account_info;
-                account_id int, uplink vaarchar(100), pv float, total_returns float, available_balance float
-                total_redeemed float
-            investmenets;
-                data varchar(20), points float, package text, months_returned int
-            commissions;
-                amount float, reason text
-            direct_children;
-                names varchar(100)
-            leg_volumes;
-                leg_one_volume float, leg_two_volume float, leg_three_volume float
-       
-       the exact instructions to form the database tables is found in DB_INSTRUCTIONS(data.h)
-            
-       the function returns true is all went well, otherwise, false
+    /* this function creates a json file describing the account in all its detail. the json is then sent
+       to the web API requesting for the account information
+       fname is a full path to the output json file
     */
 
-    /* fout_path MUST NOT END WITH A TRAILING / its added here()*/
-
     if(account==NULL) return false;
-
-    unsigned int buff_length;
-    char str_id[15];
-
-    sprintf(str_id, "%ld", account->id);
-
-    fout_path = fout_path[0]==0 ? "." : fout_path;
-
-    String strings_to_join[] = {fout_path,"/",str_id,".",DB_CMDS_EXT,"\0"};
-    length_of_all_strings(strings_to_join, &buff_length);
-    char fname[buff_length+1];
-    join_strings(fname, strings_to_join);
-
-    strings_to_join[4]=DB_EXT;
-    length_of_all_strings(strings_to_join, &buff_length);
-    char db_fname[buff_length+1];
-    join_strings(db_fname, strings_to_join);
 
     FILE *fout = fopen(fname, "w");
     if(!fout) return false;
 
-    /* dump nstructions to create tables in the db*/
-    fprintf(fout, ".open %s\n", db_fname);
-    for(int i=0; strcmp(DB_INSTRUCTIONS[i][0],"\0"); ++i)
-        fprintf(fout, "create table if not exists %s(%s);\n", DB_INSTRUCTIONS[i][0], DB_INSTRUCTIONS[i][1]);
+    fprintf(fout, "{");
 
-    /* now dump instructions to actually dump the info into the sqlite3 db file*/
-    
     /* personal info */
-    fprintf(fout, "insert into %s values(\"%s\",%ld,\"%s\",%.2f,%.2f,%.2f,%.2f);\n",DB_INSTRUCTIONS[0][0],
+    fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
+    "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f",
         account->names, account->id, (account->uplink==NULL ? "ROOT" : account->uplink->names),
         account->pv,account->total_returns,account->available_balance,account->total_redeems);
 
@@ -1354,26 +1313,13 @@ bool dump_structure_details(const Account account, String fout_path)
     dump_investments(account, fout);
     dump_direct_children(account, fout);
 
-    fprintf(fout, ".exit\n");
+    fprintf(fout, "}");
 
     fclose(fout);
 
-    /* now formulate sqlite3 command*/
-    String sqlite3_cmds[] = {"sqlite3 < \"", fname,"\"","\0"};
-    length_of_all_strings(sqlite3_cmds, &buff_length);
-    char sqlite3_cmd[buff_length+1];
-    join_strings(sqlite3_cmd, sqlite3_cmds);
 
-    /* overwrite the file before anything */
-    FILE *f = fopen(db_fname,"w");
-    if(!f) return false; 
-    fclose(f);
-    
-    /* no wrtie the info into the db */
-    unsigned int failed = system(sqlite3_cmd);
-    if(failed) return false;
-
-    /* no encrypt generated db_file */
+    /* now encrypt generated db_file(is it necessary? i doubt bcoz python/any other adaptor will delete
+       the json file as soon as it reads from it) */
 
     return true;
 }
@@ -1472,4 +1418,3 @@ void gfree(void *p)
     free(p);
     p = NULL;
 }
-

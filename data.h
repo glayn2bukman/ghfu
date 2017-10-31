@@ -1,7 +1,7 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 30 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 31 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40.0 /* $ */
@@ -30,20 +30,6 @@ char *ERRORS[] = {
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
 };
 
-/* db formation instructions */
-char *DB_INSTRUCTIONS[][2]={
-    {"account_info", "names varchar(100), account_id int, uplink varchar(100), "
-                     "pv float, total_returns float, available_balance float, total_redeemed float"},
-    {"investments", "data varchar(20), points float, package text, months_returned int"},            
-    {"commissions","amount float, reason text"},
-    {"direct_children","names varchar(100)"},
-    {"leg_volumes", "leg_one_volume float, leg_two_volume float, leg_three_volume float"},
-    
-    {"\0","\0"} /* termination condition */
-};
-
-char *DB_CMDS_EXT = "ghfudbcmds";
-char *DB_EXT = "ghfudb";
 
 /* account types */
 char *ACCOUNTS[] = {

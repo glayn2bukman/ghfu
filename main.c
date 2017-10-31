@@ -83,7 +83,7 @@ int main()
     
     printf("\nSYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
-    printf("dumped data? %s\n", dump_structure_details(brocker1, ".") ? "yes" : "no");
+    printf("dumped data? %s\n", dump_structure_details(brocker1, "brocker1.json") ? "yes" : "no");
     
     return 0;
 }

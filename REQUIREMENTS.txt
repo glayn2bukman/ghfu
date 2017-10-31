@@ -1,8 +1,7 @@
 0) Linux
 1) GCC
 2) make
-2) sqlite3-cli (sudo apt-get install sqlite3)
 3) Python2.7
 4) python-flask
-5) python-json
+5) python-json (comes with the Py2.7 stdlib)
 6) libjermCrypt.so (encryption lib for JERM Technology)
