@@ -1,7 +1,7 @@
 /* the conversion factor from amount($) to points */
 #define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 31 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+#define PAYMENT_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
 #define ACCOUNT_CREATION_FEE 40.0 /* $ */
@@ -11,6 +11,9 @@
 #define MAXIMUM_INVESTMENT 1500.0 /* 375 points */
 
 /* formally declare these values to be accessed in other language adaptors from the dynamic-lib*/
+float PF = POINT_FACTOR;
+unsigned int PD = PAYMENT_DAY;
+
 float ACF = ACCOUNT_CREATION_FEE;
 float ASF = ANNUAL_SUBSCRIPTION_FEE;
 float OF = OPERATIONS_FEE;

@@ -1,5 +1,5 @@
 /* export this file as a library with
-    $ gcc -shared -fPIC -o libghfu.so ghfu.c
+    $ gcc -shared -fPIC -o libjermGHFU.so ghfu.c
 */
 
 #include "ghfu.h"
