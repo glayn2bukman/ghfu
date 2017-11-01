@@ -42,9 +42,11 @@ int main()
     ); /* not supposed to be added...investment scheme will complain */
 
 
-    invest_money(brocker1, 40+10+180+1450, "First Package",2,true, stdout);
+    invest_money(investor1, 40+10+180+1450, "First Package",2,true, stdout);
     invest_money(brocker1, 40+10+180+1360, "Second Package",2,true, stdout);
     invest_money(brocker1, 40+10+180+980, "Third Package",2,true, stdout);
+    
+    buy_property(investor2, 360, true,"hehe",stdout);
 
 
     float monhtly_auto_refill_percentages[12][4][2] = {
@@ -82,6 +84,8 @@ int main()
     //printf("\nSYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
     printf("dumped data? %s\n", dump_structure_details(brocker1->id, "files/json/brocker1.json") ? "yes" : "no");
+    
+    structure_details(brocker1);
     
     return 0;
 }

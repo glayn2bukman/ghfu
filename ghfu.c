@@ -346,7 +346,18 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
         account->last_investment = new_investment;
     }
 
-    if(update_system_float) SYSTEM_FLOAT += amount;
+    if(update_system_float)
+    {   
+        if (account->uplink!=NULL)
+        {
+            String c_reason_strings[] = {"FSB from ", account->names,"'s investment", "\0"};
+            length_of_all_strings(c_reason_strings, &buff_length);
+            char c_reason[buff_length+1];
+            join_strings(c_reason, c_reason_strings);
+            award_commission(account->uplink,points,"FSB",c_reason, fout);
+        }
+        SYSTEM_FLOAT += amount;
+    }
 
     increment_pv(account, points, fout);
 
@@ -357,6 +368,7 @@ ID register_new_member(ID uplink_id, String names, Amount amount, String fout_na
 {
     /* python/java/etc interface to register_member */
     FILE *fout = fopen(fout_name,"w");
+    printf("#%s#\n", fout ? "y":"n");
 
     /* if return value==0, error occured, otherwise, new account ID is returned */
     ID new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
@@ -449,7 +461,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         if(points)
         {
             /* create reason for the commission and award the commission */
-            String reason_strings[] = {"FSB from ",names,"\0"};
+            String reason_strings[] = {"FSB from adding ",names,"\0"};
             unsigned int buff_length;
             length_of_all_strings(reason_strings, &buff_length);
             char buff[buff_length+1];
@@ -515,9 +527,7 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     /* if member(IV or registered investor), get IBC and those points otherwise just add this amount to 
        the system total float */
     Amount points = amount*POINT_FACTOR;
-    
-    if(!member){SYSTEM_FLOAT += amount; return;}
-    
+        
     if(IB_account==NULL){ghfu_warn(3,fout); return;}
 
     /* create reason for the commission */
@@ -528,6 +538,15 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     join_strings(reason,reason_strings);
 
     award_commission(IB_account, points, "IBC", reason,fout);
+
+    if (IB_account->uplink!=NULL)
+    {
+        String c_reason_strings[] = {"FSB from ", IB_account->names,"'s package purchase", "\0"};
+        length_of_all_strings(c_reason_strings, &buff_length);
+        char c_reason[buff_length+1];
+        join_strings(c_reason, c_reason_strings);
+        award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
+    }
 
     SYSTEM_FLOAT += amount;
 }

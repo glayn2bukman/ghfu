@@ -43,6 +43,37 @@ libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
 #   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
 #      condition in libghfu
 
+# define Account(struct account), AccountPointer (struct account_pointer), Commission(struct commission)
+# and Investment (struct investment); libghfu struct derivatives for python (will save account-search time)
+"""
+class Investment(Structure):pass
+Investment._fields_ = [
+    ("date",c_long), ("amount",c_float), ("package", c_char_p), ("package_id", c_long),
+    ("returns", c_float), ("months_returned", c_int), ("next",POINTER(Investment)),
+    ("next",POINTER(Investment))
+]
+
+class Commission(Structure):pass
+Commission._fields_ = [
+    ("reason",c_char_p), ("amount",c_float),("next",POINTER(Commission)),("prev",POINTER(Commission))
+]
+
+class AccountPointer(Structure):pass
+AccountPointer._fields_ = [
+    ("account",c_void_p), ("next",POINTER(AccountPointer)), ("prev",POINTER(AccountPointer))
+]
+
+class Account(Structure):pass
+Account._fields_ = [
+    ("id",c_long), ("names",c_char_p),("pv",c_float),("available_balance",c_float),
+    ("total_returns",c_float), ("total_redeems", c_float),("uplink", POINTER(Account)),
+    ("children",POINTER(AccountPointer)), ("last_child",POINTER(AccountPointer)),
+    ("commissions",POINTER(Commission)), ("last_commission",POINTER(Commission)),
+    ("leg_volumes", c_float*3), ("TVC_levels",c_float*2), ("investments",POINTER(Investment)),
+    ("last_investment",POINTER(Investment)), ("rank",c_int), ("highest_leg_ranks",c_int*3)
+] 
+"""
+
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
@@ -127,23 +158,25 @@ def register():
     if (deposit==-1 or isinstance(deposit,unicode) or (not (type(deposit)!=type(0) or type(deposit)!=type(0.0)))):
         reply["log"] = "silly data provided; parameter <deposit>"
         return reply_to_remote(jencode(reply))
-
-    logfile = file_path("{}".format(time.time()))
-
+    
     if uplink_id and (not libghfu.account_id(libghfu.get_account_by_id(uplink_id))):
         reply["log"] = "uplink does not exist!"
+        return reply_to_remote(jencode(reply))
 
     # allow creating accounts with ROOT uplinks? i doubt 
     elif uplink_id==0:
         reply["log"] = "you dont have the permission to add accounts to ROOT!"
+        return reply_to_remote(jencode(reply))
     else:
-        account_id = libghfu.register_new_member(uplink_id,names,c_float(deposit),logfile)
+        logfile = file_path("{}".format(time.time()))
+
+        account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
         if account_id: reply["id"]=account_id
         else: 
             reply["log"] = info(logfile)
-
-    rm(logfile)
-
+        
+        rm(logfile)
+        
     return reply_to_remote(jencode(reply))
 
 @app.route("/details", methods=["POST"])
@@ -282,7 +315,7 @@ def get_data_constants():
     return reply_to_remote(jencode(reply))
 
 @app.route("/invest", methods=["POST"])
-def invet():
+def invest():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
 
     if not client_known(request.remote_addr): 
@@ -339,7 +372,7 @@ def invet():
     return reply_to_remote(jencode(reply))
 
 if __name__=="__main__":
-    libghfu.init(os.path.join(path,"files","out","server-init")) # ==ALWAYS== INITIATE libghfu before you use it
+    libghfu.init(file_path("server-init")) # ==ALWAYS== INITIATE libghfu before you use it
     init_error = info("server-init")
     if init_error:
         sys.exit(init_error)
