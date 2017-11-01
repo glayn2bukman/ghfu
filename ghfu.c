@@ -252,7 +252,8 @@ void award_commission(Account account, Amount points, String commission_type, St
            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
         new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
-        if(new_commission->reason==NULL) memerror(fout);
+        if(new_commission->reason==NULL) memerror(fout); /* could do much better to rollback all changes 
+                                                            but i dint coz memerror exits the program!*/
         join_strings(new_commission->reason,reason_strings);
 
         new_commission->amount = p_comm;
@@ -310,8 +311,13 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     
     time(&(new_investment->date));
 
+    /* we dont know that package will point to after we exit here so we create space for it on the heap 
+       i witnessed this issue when calling libjermGHFU.so->invest from python. see that the commission
+       reason in award_commission does the same
+    */
+
     new_investment->amount = points;
-    new_investment->package = package;
+    new_investment->package = NULL;
     new_investment->package_id = package_id;
 
     new_investment->returns = 0;
@@ -319,6 +325,14 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
     new_investment->next = NULL;
     new_investment->prev = NULL;
+
+    unsigned int buff_length;
+    String reason_strings[] = {package, "\0"};
+    length_of_all_strings(reason_strings, &buff_length);
+
+    new_investment->package = (String)malloc(sizeof(char)*(buff_length+1));
+    if(new_investment->package==NULL) {gfree(new_investment); memerror(fout);}
+    join_strings(new_investment->package,reason_strings);
 
     if(account->investments==NULL)
     {
@@ -365,7 +379,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     if(new_account==NULL) memerror(fout);
 
     new_account->id = CURRENT_ID+1;
-    new_account->names = names;
+    new_account->names = NULL;
     new_account->pv = 0;
     new_account->available_balance = 0;
     new_account->total_returns = 0;
@@ -393,6 +407,15 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     new_account->highest_leg_ranks[1] = 0.0;
     new_account->highest_leg_ranks[2] = 0.0;
 
+    unsigned int buff_length;
+    String name_strings[] = {names, "\0"};
+    length_of_all_strings(name_strings, &buff_length);
+
+    new_account->names = (String)malloc(sizeof(char)*(buff_length+1));
+    if(new_account->names==NULL) {gfree(new_account); memerror(fout);}
+    join_strings(new_account->names,name_strings);
+
+
     /* attempt to invest money (if amount>(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))*/
     Amount _amount = amount;
     amount = amount-(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE);
@@ -410,6 +433,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         AccountPointer ap = ap1;
         if(ap==NULL)
         {
+            gfree(new_account->names);
             gfree(new_account); /* you dont want memory leaks, trust me */
             memerror(fout);
         }
@@ -443,6 +467,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     if(ap==NULL)
     {
          /* you dont want memory leaks, trust me */
+        gfree(new_account->names);
         if(uplink!=NULL) gfree(ap1);
         gfree(new_account);
         
@@ -464,6 +489,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
             gfree(ap1);
         }
         gfree(ap);
+        gfree(new_account->names);
         gfree(new_account);
         return NULL;
     }

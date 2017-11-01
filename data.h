@@ -1,24 +1,16 @@
 /* the conversion factor from amount($) to points */
-#define POINT_FACTOR 0.25
 #define TBB_MAX_GENERATIONS 7
-#define PAYMENT_DAY 28 /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+
+float POINT_FACTOR = 0.25;
+unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
 /* account fees($) */
-#define ACCOUNT_CREATION_FEE 40.0 /* $ */
-#define ANNUAL_SUBSCRIPTION_FEE 10.0 /* $ */
-#define OPERATIONS_FEE 180.0 /* $ */
-#define MINIMUM_INVESTMENT 500.0 /* 125 points */
-#define MAXIMUM_INVESTMENT 1500.0 /* 375 points */
+float ACCOUNT_CREATION_FEE = 40.0; /* $ */
+float ANNUAL_SUBSCRIPTION_FEE = 10.0; /* $ */
+float OPERATIONS_FEE = 180.0; /* $ */
+float MINIMUM_INVESTMENT = 500.0; /* 125 points */
+float MAXIMUM_INVESTMENT = 1500.0; /* 375 points */
 
-/* formally declare these values to be accessed in other language adaptors from the dynamic-lib*/
-float PF = POINT_FACTOR;
-unsigned int PD = PAYMENT_DAY;
-
-float ACF = ACCOUNT_CREATION_FEE;
-float ASF = ANNUAL_SUBSCRIPTION_FEE;
-float OF = OPERATIONS_FEE;
-float MinI = MINIMUM_INVESTMENT;
-float MaxI = MAXIMUM_INVESTMENT;
 
 /* program errors */
 char *ERRORS[] = {

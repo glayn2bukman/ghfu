@@ -83,7 +83,5 @@ int main()
     
     printf("dumped data? %s\n", dump_structure_details(brocker1->id, "files/json/brocker1.json") ? "yes" : "no");
     
-    //structure_details(NULL);
-    
     return 0;
 }

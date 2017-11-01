@@ -27,6 +27,22 @@ path = os.path.split(os.path.realpath(__name__))[0]
 
 libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 
+# define libghfu function argtypes (so that we can call them normally and let ctypes do any type conversions)
+libghfu.invest.argtypes = [c_long, c_float, c_char_p, c_long, c_int, c_char_p]
+libghfu.dump_structure_details.argtype = [c_long, c_char_p]
+libghfu.get_account_by_id.argtypes = [c_long]
+libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
+libghfu.purchase_property.argtypes = [c_long, c_float, c_int, c_char_p, c_char_p]
+libghfu.redeem_account_points.argtypes = [c_long, c_float, c_char_p]
+libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
+
+# libghfu.perform_monthly_operations is called as follows
+#   data = [(375,64),(250,60),(125,49),(0,0)]
+#   libghfu.perform_monthly_operations(((c_float*2)*4)(*data), "fout")
+
+#   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
+#      condition in libghfu
+
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
@@ -54,7 +70,6 @@ def reply_to_remote(reply):
 
 # define scanning function (we ony wanna accept requests from known clients)
 def client_known(addr):
-    print addr
     if not(os.path.isfile(os.path.join(path,"Server","known_clients"))):
         with open(os.path.join(path,"Server","known_clients"), "w") as f: f.write(known_clients)
     with open(os.path.join(path,"Server","known_clients"), "r") as f:
@@ -84,25 +99,17 @@ def register():
 
     json_req = request.get_json()
 
+    # deposit should include registration,anual server charges + operations fee if investing
+
     if json_req:
         uplink_id = json_req.get("uplink",-1)
-        names = str(json_req.get("names",""));
+        names = str(json_req.get("names",-1))
         deposit = json_req.get("deposit",-1)
 
-        if uplink_id==-1:
-            reply["log"] = "silly json data provided; parameter <uplink_id>"
-            return reply_to_remote(jencode(reply))
-        if not names:
-            reply["log"] = "silly json data provided; parameter <names>"
-            return reply_to_remote(jencode(reply))
-        if deposit==-1:
-            reply["log"] = "silly json data provided; parameter <deposit>"
-            return reply_to_remote(jencode(reply))
-
     else:
-        uplink_id = request.form["uplink"]
-        names = request.form["names"]
-        deposit = request.form["deposit"] # registration,anual server charges + operations fee if investing
+        uplink_id = request.form.get("uplink",-1)
+        names = request.form.get("names",-1)
+        deposit = request.form.get("deposit",-1) 
 
         try:
             uplink_id = int(uplink_id)
@@ -110,7 +117,17 @@ def register():
         except:
             reply["log"] = "silly form data provided for uplink(id) or deposit"
             return reply_to_remote(jencode(reply))
-        
+
+    if (uplink_id==-1 or type(uplink_id)!=type(0)):
+        reply["log"] = "silly data provided; parameter <uplink_id>"
+        return reply_to_remote(jencode(reply))
+    if not names:
+        reply["log"] = "silly data provided; parameter <names>"
+        return reply_to_remote(jencode(reply))
+    if (deposit==-1 or isinstance(deposit,unicode) or (not (type(deposit)!=type(0) or type(deposit)!=type(0.0)))):
+        reply["log"] = "silly data provided; parameter <deposit>"
+        return reply_to_remote(jencode(reply))
+
     logfile = file_path("{}".format(time.time()))
 
     if uplink_id and (not libghfu.account_id(libghfu.get_account_by_id(uplink_id))):
@@ -123,7 +140,7 @@ def register():
         account_id = libghfu.register_new_member(uplink_id,names,c_float(deposit),logfile)
         if account_id: reply["id"]=account_id
         else: 
-            reply["log"] = info(logname)
+            reply["log"] = info(logfile)
 
     rm(logfile)
 
@@ -160,11 +177,8 @@ def details():
 
     if json_req:
         account_id = json_req.get("id",-1)
-        if(account_id==-1):
-            reply["log"] = "silly json data provided; parameter <id>"
-            return reply_to_remote(jencode(reply))
     else:
-        account_id = request.form["id"]
+        account_id = request.form.get("id",-1)
 
         try:
             account_id = int(account_id)
@@ -172,6 +186,9 @@ def details():
             reply["log"] = "silly form data provided; parameter <id>"
             return reply_to_remote(jencode(reply))
     
+    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+        reply["log"] = "silly data provided; parameter <id>"
+        return reply_to_remote(jencode(reply))
     
     jsonfile = os.path.join(path, "files","json","{}".format(time.time()))
         
@@ -199,34 +216,30 @@ def buy_package():
         IB_id = json_req.get("IB_id",-1)
         amount = json_req.get("amount",-1)
         is_member = json_req.get("buyer_is_member", 0)
-        buyer_names = json_req.get("buyer_names", "bought package") # use packag name if registered member is the one 
+        buyer_names = str(json_req.get("buyer_names", "bought package")) # use packag name if registered member is the one 
                                                                     # buying
-
-        if(IB_id==-1 or type(IB_id)!=type(0)):
-            reply["log"] = "silly json data provided; parameter <IB_id>"
-            return reply_to_remote(jencode(reply))
-        if(amount==-1 and (not (type(amount)==type(0.0) or type(amount)==type(0)))):
-            reply["log"] = "silly json data provided; parameter <amount>"
-            return reply_to_remote(jencode(reply))
-
         is_member = 1 if is_member else 0 # convert from True/False to 1/0 (C daint have bools)
 
-
     else:
-        IB_id = request.form["IB_id"]
-        amount = request.form["amount"]
-        is_member = request.form["buyer_is_member"]
-        buyer_names = request.form["buyer_names"]
-
-        print is_member
+        IB_id = request.form.get("IB_id",-1)
+        amount = request.form.get("amount",-1)
+        is_member = request.form.get("buyer_is_member", 0)
+        buyer_names = request.form.get("buyer_names", "bought package")
 
         try:
             IB_id = int(IB_id)
             amount = float(amount)
             is_member = 1 if is_member=="true" else 0
         except:
-            reply["log"] = "silly form data provided; parameters <IB_id>,<amount> or <buyer_is_member>"
+            reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
+
+    if(IB_id==-1 or type(IB_id)!=type(0) or isinstance(IB_id,unicode) ):
+        reply["log"] = "silly data provided; parameter <IB_id>"
+        return reply_to_remote(jencode(reply))
+    if(amount==-1 or (not (type(amount)==type(0.0) or type(amount)==type(0))) or isinstance(amount,unicode) ):
+        reply["log"] = "silly data provided; parameter <amount>"
+        return reply_to_remote(jencode(reply))
 
     logfile = file_path("{}".format(time.time()))
 
@@ -258,13 +271,70 @@ def get_data_constants():
 
     reply = {}
 
-    reply["point-factor"] = c_float.in_dll(libghfu, "PF").value
-    reply["payment-day"] = c_int.in_dll(libghfu, "PD").value
-    reply["account-creation-fee"] = c_float.in_dll(libghfu, "ACF").value
-    reply["annual-subscription-fee"] = c_float.in_dll(libghfu, "ASF").value
-    reply["operations-fee"] = c_float.in_dll(libghfu, "OF").value
-    reply["minimum-investment"] = c_float.in_dll(libghfu, "MinI").value
-    reply["maximum-investment"] = c_float.in_dll(libghfu, "MaxI").value
+    reply["point-factor"] = c_float.in_dll(libghfu, "POINT_FACTOR").value
+    reply["payment-day"] = c_int.in_dll(libghfu, "PAYMENT_DAY").value
+    reply["account-creation-fee"] = c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value
+    reply["annual-subscription-fee"] = c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value
+    reply["operations-fee"] = c_float.in_dll(libghfu, "OPERATIONS_FEE").value
+    reply["minimum-investment"] = c_float.in_dll(libghfu, "MINIMUM_INVESTMENT").value
+    reply["maximum-investment"] = c_float.in_dll(libghfu, "MAXIMUM_INVESTMENT").value
+
+    return reply_to_remote(jencode(reply))
+
+@app.route("/invest", methods=["POST"])
+def invet():
+    " if returned json <status> key is true, all went well, otherwise, check <log>"
+
+    if not client_known(request.remote_addr): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    
+    if json_req:
+        account_id = json_req.get("id", -1)
+        amount = json_req.get("amount", -1)
+        package = str(json_req.get("package", ""))
+        package_id = json_req.get("package_id", -1)
+
+    else:
+        account_id = request.form.get("id",-1)
+        amount = request.form.get("amount", -1)
+        package = request.form.get("package", "")
+        package_id = request.form.get("package_id", -1)
+
+        try:
+            account_id = int(account_id)
+            amount = float(amount)
+            package_id = int(package_id)
+        except:
+            reply["log"] = "silly form data provided"
+            return reply_to_remote(jencode(reply))
+            
+    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+        reply["log"] = "silly data provided; parameter <account_id>"
+        return reply_to_remote(jencode(reply))
+    if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
+        reply["log"] = "silly data provided; parameter <amount>"
+        return reply_to_remote(jencode(reply))
+    if not package:
+        reply["log"] = "silly data provided; parameter <package>"
+        return reply_to_remote(jencode(reply))
+    if(package_id==-1 or type(package_id)!=type(0) or isinstance(package_id,unicode) ):
+        reply["log"] = "silly data provided; parameter <package_id>"
+        return reply_to_remote(jencode(reply))
+
+    logfile = file_path("{}".format(time.time()))
+
+    package = str(package)
+    
+    if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
+        reply["status"]=True
+    else:
+        reply["log"] = info(logfile)
+
+    rm(logfile)
 
     return reply_to_remote(jencode(reply))
 
@@ -276,7 +346,8 @@ if __name__=="__main__":
 
     # create contemporary member...to act as first member in case theere are no members yet in structure
     libghfu.register_new_member(0, "PSEUDO-ROOT",
-        c_float(c_float.in_dll(libghfu, "ACF").value + c_float.in_dll(libghfu, "ASF").value),
+        c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
+        c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value+180+500,
         file_path("pseudo-root"))
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)

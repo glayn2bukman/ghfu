@@ -3,7 +3,7 @@
 
 # the .so lib
 libghfu: data.h ghfu.h ghfu.c
-	mkdir -p lib && gcc -shared -fPIC -o lib/libjermGHFU.so ghfu.c
+	mkdir -p lib && gcc -shared -fPIC -Wall -o lib/libjermGHFU.so ghfu.c
 
 # the main(for testing the library)
 main: data.h ghfu.h ghfu.c main.c
