@@ -368,7 +368,6 @@ ID register_new_member(ID uplink_id, String names, Amount amount, String fout_na
 {
     /* python/java/etc interface to register_member */
     FILE *fout = fopen(fout_name,"w");
-    printf("#%s#\n", fout ? "y":"n");
 
     /* if return value==0, error occured, otherwise, new account ID is returned */
     ID new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
@@ -1552,3 +1551,126 @@ void gfree(void *p)
     p = NULL;
 }
 
+/* data constants modifiers*/
+bool set_constant(String constant, Amount value)
+{        
+    if (value<=0) return false; 
+    
+    bool status = true;
+    
+    if(!strcmp(constant, "payment-day")) PAYMENT_DAY = (int)value;
+    else if(!strcmp(constant, "point-factor")) POINT_FACTOR = value;
+    else if(!strcmp(constant, "account-creation-fee")) ACCOUNT_CREATION_FEE = value;
+    else if(!strcmp(constant, "annual-subscription-fee")) ANNUAL_SUBSCRIPTION_FEE = value;
+    else if(!strcmp(constant, "operations-fee")) OPERATIONS_FEE = value;
+    else if(!strcmp(constant, "minimum-investment")) MINIMUM_INVESTMENT = value;
+    else if(!strcmp(constant, "maximum-investment")) MAXIMUM_INVESTMENT = value;
+
+    else status = false;
+
+    /* dump changes to file so that init sets them the next time the system is rebooted */
+
+    return status;
+}
+
+bool dump_constants(String jermCrypt_path, String save_dir)
+{
+    bool status = false;
+
+    unsigned int buff_length;
+    String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
+    String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
+    
+    length_of_all_strings(crypt_lib_paths, &buff_length);
+    char crypt_lib_path[buff_length+1];
+    join_strings(crypt_lib_path, crypt_lib_paths);
+
+    length_of_all_strings(data_file_paths, &buff_length);
+    char data_file_path[buff_length+1];
+    join_strings(data_file_path, data_file_paths);
+
+    FILE *fout = fopen(data_file_path,"wb");
+
+    if(!fout) return status;
+
+    /* load function from jermCrypt library eg; */
+    void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
+
+    if(!libjermCrypt) {fclose(fout); return status;}
+
+    /* encrypt_file prototype in libjermCrypt.so */
+    // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose)
+    
+    char *(*encrypt_file)(char*,char*,char*,int,int) = 
+        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "encrypt_file");
+
+    fprintf(fout, "%d\x01%f\x02%f\x03%f\x04%f\x05%f\x06%f\x07%f\x08%f\x09%f\x10%ld\x11%ld\x12", 
+        PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
+        MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
+        ACTIVE_ACCOUNTS,CURRENT_ID
+        );
+
+    fclose(fout);
+    
+    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+            
+    status = true;
+
+    return status;
+}
+
+bool load_constants(String jermCrypt_path, String save_dir)
+{
+    bool status = false;
+
+    unsigned int buff_length;
+    String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
+    String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
+    
+    length_of_all_strings(crypt_lib_paths, &buff_length);
+    char crypt_lib_path[buff_length+1];
+    join_strings(crypt_lib_path, crypt_lib_paths);
+
+    length_of_all_strings(data_file_paths, &buff_length);
+    char data_file_path[buff_length+1];
+    join_strings(data_file_path, data_file_paths);
+
+    FILE *fin = fopen(data_file_path,"rb");
+
+    if(!fin) return status;
+
+    /* load function from jermCrypt library eg; */
+    void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
+
+    if(!libjermCrypt) {fclose(fin); return status;}
+
+    /* encrypt_file & decrypt_file prototypes in libjermCrypt.so */
+    // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
+    // char *decrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
+
+    char *(*encrypt_file)(char*,char*,char*,int,int) = 
+        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "encrypt_file");
+
+    char *(*decrypt_file)(char*,char*,char*,int,int) = 
+        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "decrypt_file");
+
+    fclose(fin);
+
+    decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+
+    fin = fopen(data_file_path,"rb");
+
+    fscanf(fin, "%d\x01%f\x02%f\x03%f\x04%f\x05%f\x06%f\x07%f\x08%f\x09%f\x10%ld\x11%ld\x12", 
+        &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
+        &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
+        &ACTIVE_ACCOUNTS,&CURRENT_ID
+        );
+
+    fclose(fin);
+    
+    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+            
+    status = true;
+
+    return status;
+}

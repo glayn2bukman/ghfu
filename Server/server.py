@@ -14,7 +14,6 @@
 #   NB: String is defined as (char *) in ghfu.c. bool is defined as (enum bool {false, true}),
 #       ID is defined as (unsigned long)
 
-
 # ALL FUNCTIONS IN THIS SCRIPT SHOULD ACCEPT BOTH FORMS AND JSON DATA AS REQUEST(FOR FLEXIBILITY) BUT WILL 
 # ALWAYS RETURN JSON
 
@@ -35,6 +34,7 @@ libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
 libghfu.purchase_property.argtypes = [c_long, c_float, c_int, c_char_p, c_char_p]
 libghfu.redeem_account_points.argtypes = [c_long, c_float, c_char_p]
 libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
+libghfu.set_constant.argtypes = [c_char_p, c_float]
 
 # libghfu.perform_monthly_operations is called as follows
 #   data = [(375,64),(250,60),(125,49),(0,0)]
@@ -289,14 +289,8 @@ def buy_package():
 @app.route("/data_constants", methods=["POST"])
 def get_data_constants():
     """ return data constants ie;
-        float PF = POINT_FACTOR;
-        unsigned int PD = PAYMENT_DAY;
-
-        float ACF = ACCOUNT_CREATION_FEE;
-        float ASF = ANNUAL_SUBSCRIPTION_FEE;
-        float OF = OPERATIONS_FEE;
-        float MinI = MINIMUM_INVESTMENT;
-        float MaxI = MAXIMUM_INVESTMENT;
+        POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
+        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT
     """
 
     if not client_known(request.remote_addr): 
@@ -313,6 +307,36 @@ def get_data_constants():
     reply["maximum-investment"] = c_float.in_dll(libghfu, "MAXIMUM_INVESTMENT").value
 
     return reply_to_remote(jencode(reply))
+
+@app.route("/set_data_constants", methods=["POST"])
+def set_data_constants():
+    """ set data constants ie;
+        POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
+        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT
+    """
+    if not client_known(request.remote_addr): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {}
+
+    json_req = request.get_json()
+
+    if json_req:
+        for key in json_req:
+            if(isinstance(json_req[key],int) or isinstance(json_req[key],float)):
+                reply[key] = libghfu.set_constant(key, json_req[key])
+                reply[key] = True if reply[key] else False
+            else: reply[key]=False
+    else:
+        for key in request.form:
+            try:
+                value = float(request.form[key])
+                reply[key] = libghfu.set_constant(key, value)
+                reply[key] = True if reply[key] else False
+            except: reply[key]=False
+
+    return reply_to_remote(jencode(reply))
+
 
 @app.route("/invest", methods=["POST"])
 def invest():
@@ -382,5 +406,6 @@ if __name__=="__main__":
         c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
         c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value+180+500,
         file_path("pseudo-root"))
+
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)

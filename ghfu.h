@@ -16,6 +16,8 @@
 #include<stdlib.h>
 #include<string.h>
 #include<time.h>
+#include<dlfcn.h>
+
 
 /* type declarations */
 typedef unsigned long ID;
@@ -24,6 +26,7 @@ typedef char *String;
 
 typedef unsigned int bool;
 enum {false, true};
+
 
 typedef struct commission
 {
@@ -142,3 +145,7 @@ void perform_monthly_operations(float auto_refill_percentages[4][2], String fout
 void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
 void gfree(void *p);
 
+/* data constants modifiers*/
+bool set_constant(String constant, Amount value);
+bool dump_constants(String jermCrypt_path, String save_dir);
+bool load_constants(String jermCrypt_path, String save_dir);
