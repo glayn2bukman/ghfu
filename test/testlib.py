@@ -9,9 +9,7 @@ jout = os.path.join(root,"test","json")
 
 libghfu = CDLL(os.path.join(root,"lib","libjermGHFU.so"))
 
-libghfu.init(fout)
-
-if(open(fout,"r").read()): sys.exit(open(fout,"r").read())
+libghfu.init(os.path.join(root,"lib"), os.path.join(root,"test"))
 
 root_account_ids = []
 fgen_account_ids = []

@@ -113,7 +113,7 @@ AccountPointer HEAD, TAIL;
 
 /* function prototypes */
 void memerror(FILE *fout);
-void init(String fout_name);
+void init(String jermCrypt_path, String save_dir);
 void increment_pv(Account account, const Amount points, FILE *fout);
 void award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
 bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, FILE *fout);

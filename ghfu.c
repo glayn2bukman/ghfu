@@ -16,31 +16,66 @@ void memerror(FILE *fout)
     exit(1); /* is exiting the right choice? if so, please first dump all data to file*/
 }
 
-void init(String fout_name)
+void init(String jermCrypt_path, String save_dir)
 {
     /* Should first destroy any open structures such as HEAD n TAIL, etc n reset all global values.
        If there is a stored structure file, load that instead and then set al necessary variables
        accordingly
     */
 
-    FILE *fout = fopen(fout_name, "w");
-
-    HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
-
-    if(HEAD==NULL) memerror(fout);
-
-    HEAD->account = NULL;
-    HEAD->next = NULL;
-    HEAD->prev = NULL;
-
-    TAIL = HEAD;
+    unsigned int buff_length;
+    String structure_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
     
-    /* these data variables shall be reset when reading data from file */
-    SYSTEM_FLOAT=0; CUMULATIVE_COMMISSIONS=0; COMMISSIONS=0;
-    
-    ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
+    length_of_all_strings(structure_file_paths, &buff_length);
+    char structure_file_path[buff_length+1];
+    join_strings(structure_file_path, structure_file_paths);
 
-    CURRENT_ID = 0; /* only increments, never the opposite */
+    FILE *fin = fopen(structure_file_path,"rb");
+
+    bool loaded_structure = false;
+    if(fin) 
+    {
+        fclose(fin); /* you dont want load_structure to attempt opening this file when its already
+                        opened in init
+                     */
+        loaded_structure = load_structure(jermCrypt_path, save_dir);
+    }
+    
+    if(!loaded_structure)
+    {
+        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+
+        if(HEAD==NULL) memerror(stdout);
+
+        HEAD->account = NULL;
+        HEAD->next = NULL;
+        HEAD->prev = NULL;
+
+        TAIL = HEAD;
+    }
+    
+    String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
+    
+    length_of_all_strings(data_file_paths, &buff_length);
+    char data_file_path[buff_length+1];
+    join_strings(data_file_path, data_file_paths);
+
+    fin = fopen(structure_file_path,"rb");
+
+    if(fin)
+    {
+        fclose(fin);
+        load_constants(jermCrypt_path, save_dir);
+    }
+    else
+    {
+        /* these data variables shall be reset when reading data from file */
+        SYSTEM_FLOAT=0; CUMULATIVE_COMMISSIONS=0; COMMISSIONS=0;
+        
+        ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
+
+        CURRENT_ID = 0; /* only increments, never the opposite */
+    }
 }
 
 void increment_pv(Account account, const Amount points, FILE *fout)
@@ -1985,6 +2020,18 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
         TAIL = HEAD;
     }
+    else
+    {
+        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+
+        if(HEAD==NULL) memerror(stdout);
+
+        HEAD->account = NULL;
+        HEAD->next = NULL;
+        HEAD->prev = NULL;
+
+        TAIL = HEAD;
+    }
 
 
     decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
@@ -2312,8 +2359,6 @@ bool load_structure(String jermCrypt_path, String save_dir)
         child_p = child_p->next;
         gfree(p_child_p);
     }
-
-    structure_details(get_account_by_id(1));
 
     fclose(fin);
     

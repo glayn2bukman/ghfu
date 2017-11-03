@@ -2,7 +2,18 @@
 
 int main()
 {
-	init("test/main-init");
+	init("lib","test");
+    if(HEAD->next!=NULL) /* found daved structure, just load that and leave*/
+    {
+        structure_details(NULL);
+        fprintf(stdout, "\nLOADED SAVED STRUCTURE\n");
+        return 0;
+    }
+
+    fprintf(stdout, "\nNO SAVED STRUCTURE FOUND...system dropping to virginity mode\n");
+    fprintf(stdout, "press enter to continue...");
+    char c;
+    fscanf(stdin, "%c",&c);
 
     /* create a simple brocker */
     Account brocker1 = register_member(NULL, "Brocker 1",50,stdout);
