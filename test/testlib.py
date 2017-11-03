@@ -1,4 +1,4 @@
-import os, sys, json
+import os, sys, json, time
 from ctypes import *
 
 root = os.path.realpath(__name__)
@@ -46,6 +46,14 @@ for i in range(len(root_accounts)):
     
 account_ids = root_account_ids + fgen_account_ids + sgen_account_ids
 
+# set payment date to today and start payment
+c_int.in_dll(libghfu, "PAYMENT_DAY").value = time.gmtime()[2]
+
+libghfu.perform_monthly_operations(
+    ((c_float*2)*4)((375,64), (250,60), (125,49), (0,0)), 
+    fout)
+
+# display account information
 for account_id in account_ids:
     if libghfu.dump_structure_details(account_id, jout):
         account_data = json.JSONDecoder().decode(open(jout,"r").read())
@@ -56,6 +64,7 @@ for account_id in account_ids:
         raw_input("ERROR in dumping account id %d. press enter to continue..."%account_id)
 
 # now dump structure
-print libghfu.dump_constants(os.path.join(root,"lib"), os.path.join(root,"test"))
-print libghfu.load_constants(os.path.join(root,"lib"), os.path.join(root,"test"))
-print libghfu.save_structure(os.path.join(root,"lib"), os.path.join(root,"test"))
+print "dumped constants?","yes" if libghfu.dump_constants(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"
+print "loaded constants?", "yes" if libghfu.load_constants(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"
+print "saved structure?", "yes" if libghfu.save_structure(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"
+print "loaded constants?", "yes" if libghfu.load_structure(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"

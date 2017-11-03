@@ -194,7 +194,7 @@ def details():
             "total_redeems": float,
             "commissions": [[float amount, str reason],...],
             "leg_volumes": [float leg-1-volume, float leg-2-volume, float leg-3-volume],
-            "investments": [[str date, float points, str package, int months_returned, returns],...],
+            "investments": [[str date, float points, str package, int package id, int months_returned, returns],...],
             "direct_children":[str child1_names, str child2_names,.....] /* names NOT ids, again, its for 
                                                                             for security reasons */
         }

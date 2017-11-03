@@ -94,6 +94,18 @@ typedef struct account
 
 } *Account;
 
+typedef struct child
+    /* is used to represent account children when loading structure from disk. at the time of an
+       account reconstruction, there are no children yet(because children come after the account
+       as the structure is stored in linear order or account creation ie HEAD->next->next->...TAIL)
+       hence we can only properly allocate 
+    */
+{
+    ID id;
+    ID uplink_id;   
+    struct child *next;
+} *Child;
+
 Amount SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS;
 ID ACTIVE_ACCOUNTS, CURRENT_ID;
 

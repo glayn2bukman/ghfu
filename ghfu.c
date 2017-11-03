@@ -1241,9 +1241,9 @@ void dump_investments(const Account account, FILE *fout)
 
             lt = localtime(&(inv->date));
 
-            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%d, %.2f]",
+            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%ld,%d, %.2f]",
                 lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
-                inv->amount,inv->package,inv->months_returned, inv->returns);
+                inv->amount,inv->package,inv->package_id,inv->months_returned, inv->returns);
             inv = inv->next;            
         }
 
@@ -1721,37 +1721,89 @@ bool save_structure(String jermCrypt_path, String save_dir)
     Commission commission;
     Investment investment;
 
+    unsigned long number_of_items;
+
     while(acc_p!=NULL)
     {
-        /*       separation xters:
-            \x1: values in the same section of a member
-            \x2: different sections of a member
-            \x3: diffent sub-sections of a section (for sections with multiple attrs eg each commission has
-                amount & reason which will be separated by x1 but this duo will be separated from the next 
-                by \x3 ie <amount1\x1reason1\x3amount2\x1reason2>)
-            \x4: different members
+        /*       dumping logic:
+            \x1: separation xter btn all data
+            
+            1) dump all numerical values(id,pv,etc) first
+            2) dump the length of the account names followed by the names
+            3) dump the number of direct-children then the direct children ids
+            4) dump the number of commissions and then for each commission, dump the amount then
+               the length of the reason
+            5) dump the number of investments and then for each investment, dump the date then
+               the amount, returns, months returned, package id, the length of the package name 
+               and the package name itself
+               
+               NB: since the last attr to be represented is a string whse length is known(if there
+                   was an investment), there is no need to separate different accounts with \x1
+            
+            an example is;
+            account details:
+                id: 5
+                names: "glayn bukman"
+                pv: 56.23
+                available_balance: 300.89
+                total_returns: 23.56
+                total_redeems: 0.00
+                uplink_id: 3 // NULL(ROOT)->id = 0
+                leg_volumes: [56.23,124.98,489.26]
+                TVC_levels: [869,248.79]
+                rank: 0
+                highest_leg_ranks: [1,1,0]
+                children_ids:  [3,4,9]
+                commissions: [(23.56, "reason 1"), (56.18,"wow this is cool!")]
+                
+                //investment data format: date,amount,pkg-name,pkg-id,months-returned,total-returns
+                investments: [(13625468,200.03,"pkg 1", 23,3,163.89)]
+             
+                the output would be(neglect the newlines);
+                
+                5\x156.23\x1300.89\x123.56\x10.00\x13\x156.23\x1124.98\x1489.26\x1869\x1248.79\x10
+                \x11\x11\x10\x1
+                12\x1glayn bukman
+                3\x14\x19\x1
+                2\x123.56\x18\x1reason 156.18\x117\x1wow this is cool!
+                1\x113625468\x1200.03\x1163.89\x13\x1
+                23\x15\x1pkg 1
+             
+            NB: after dumping strings, dont use the separation xter(bcoz the length of the string
+                dumped just b4 it tells us exactly where to stop scanning for the string!). however,
+                its necessay to put a separation xter between the length of the string and the string 
+                because in a very wiered scenario, the first xters of the string may contaain valid
+                numbers eg "23; that was the number of commisions awarded!"
+            
+            if this logic is not clear, you dont wanna read thru the load_structure function!
+            Also, the exact implementation order may change but the logic still holds
         */
         acc = acc_p->account;
         
         fprintf(fout, 
                 /*section 1 (first-hand numeric attributes of the member + names)*/
-            "%ld\x1%s\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%d\x1"
-            "%d\x1%d\x1%d",
-            acc->id,acc->names,acc->pv,acc->available_balance,acc->total_returns,acc->total_redeems,
+            "%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%d\x1"
+            "%d\x1%d\x1%d\x1%ld\x1%s",
+            acc->id,acc->pv,acc->available_balance,acc->total_returns,acc->total_redeems,
             (acc->uplink==NULL ? 0 : acc->uplink->id), acc->leg_volumes[0], acc->leg_volumes[1],
             acc->leg_volumes[2],acc->TVC_levels[0],acc->TVC_levels[1], acc->rank,
-            acc->highest_leg_ranks[0],acc->highest_leg_ranks[1],acc->highest_leg_ranks[2] 
+            acc->highest_leg_ranks[0],acc->highest_leg_ranks[1],acc->highest_leg_ranks[2],
+            strlen(acc->names),acc->names
         );
 
-        fprintf(fout, "\x2"); /* start next section (children)*/
+        /* start next section (children)*/
 
         child = acc->children;
+        number_of_items = 0;
         if(child==NULL) 
-            fprintf(fout,"0\x1"); /*the \x1 is important here even tho there is only one member(NULL=0) because 
-                                    at loading time, we cant know that there was only 0(NULL) and not for 
-                                    example 1\x18\x1 (2 children with ids 1&8)*/
+            fprintf(fout,"%ld\x1",number_of_items); 
         else
         {
+            while(child!=NULL) {++number_of_items; child=child->next;}
+            fprintf(fout,"%ld\x1",number_of_items); 
+
+            child = acc->children;
+
             while(child!=NULL)
             {
                 fprintf(fout, "%ld\x1",((Account)(child->account))->id);
@@ -1759,37 +1811,48 @@ bool save_structure(String jermCrypt_path, String save_dir)
             }
         }
 
-        fprintf(fout, "\x2"); /* start next section (commissions)*/
+        /* start next section (commissions)*/
 
         commission = acc->commissions;
-        if(commission==NULL) 
-            fprintf(fout, "%d\x1%sx3",0,"0"); /*commissions are in form amount\x1reason\x3*/
+        number_of_items = 0;
+        if(commission==NULL)
+            fprintf(fout, "%ld\x1",number_of_items);
         else
         {
+            while(commission!=NULL){++number_of_items; commission=commission->next;}
+            fprintf(fout, "%ld\x1",number_of_items);
+
+            commission = acc->commissions;
+
             while(commission!=NULL)
             {
-                fprintf(fout, "%.2f\x1%s\x3",commission->amount, commission->reason);
+                fprintf(fout, "%.2f\x1%ld\x1%s",commission->amount, strlen(commission->reason), 
+                    commission->reason);
                 commission = commission->next;
             }
         }
 
-        fprintf(fout, "\x2"); /* start next section (investments)*/
+        /* start next section (investments)*/
+        number_of_items = 0;
         investment = acc->investments;
 
         if(investment==NULL)
-            fprintf(fout, "%d\x1%d\x1%s\x1%d\x1%d\x1%d\x3",0,0,"0",0,0,0);
+            fprintf(fout, "%ld\x1",number_of_items);
         else
         {
+            while(investment!=NULL){++number_of_items; investment=investment->next;}
+            fprintf(fout, "%ld\x1",number_of_items);
+
+            investment = acc->investments;
             while(investment!=NULL)
             {
-                fprintf(fout, "%ld\x1%.2f\x1%s\x1%ld\x1%.2f\x1%d\x3",
-                    investment->date, investment->amount, investment->package, investment->package_id,
-                    investment->returns, investment->months_returned);
+                fprintf(fout, "%ld\x1%.2f\x1%ld\x1%.2f\x1%d\x1%ld\x1%s",
+                    investment->date, investment->amount,  
+                    investment->package_id, investment->returns, investment->months_returned,
+                    strlen(investment->package), investment->package);
                 investment = investment->next;
             }
         }
-
-        fprintf(fout,"\x4"); /* separate this member from th nect  members */ 
         
         acc_p = acc_p->next;
     }
@@ -1861,8 +1924,11 @@ bool load_structure(String jermCrypt_path, String save_dir)
     AccountPointer acc_p, p_acc_p; /* p_acc_p = prev ac_p */
     AccountPointer child, p_child; /* p_acc_p = prev ac_p */
     Account acc;
-    Commission commission, p_commission;
-    Investment investment, p_investment;
+    Commission commission, p_commission, new_commission;
+    Investment investment, p_investment, new_investment;
+
+    Child child_p=NULL, last_child_p=NULL, new_child_p, p_child_p;
+    unsigned long number_of_items, child_id, string_index, string_length;
     
     /* perform garbage collection on the current structure*/
     if(HEAD!=NULL)
@@ -1926,8 +1992,328 @@ bool load_structure(String jermCrypt_path, String save_dir)
     fin = fopen(data_file_path,"rb");
 
     /* load structure */
+/*
+    AccountPointer acc_p, p_acc_p;
+    AccountPointer child, p_child;
+    Account acc;
+    Commission commission, p_commission;
+    Investment investment, p_investment;
+
+    Child child_p=NULL;
+    unsigned long number_of_items;
+*/
+    ID id, uplink_id;
+    while(fscanf(fin, "%ld\x1", &id)!=EOF)
+    {
+        Account new_account = (Account)malloc(sizeof(struct account));
+        
+        if(new_account==NULL) memerror(stdout);
+
+        new_account->id = id;
+        new_account->names = NULL;
+        new_account->pv = 0;
+        new_account->available_balance = 0;
+        new_account->total_returns = 0;
+        new_account->total_redeems = 0;
+        
+        new_account->uplink = NULL;
+        new_account->children = NULL;
+        new_account->last_child = NULL;
+        new_account->commissions = NULL;
+        new_account->last_commission = NULL;
+
+        new_account->leg_volumes[0] = 0.0;
+        new_account->leg_volumes[1] = 0.0;
+        new_account->leg_volumes[2] = 0.0;
+
+        new_account->TVC_levels[0] = 0;
+        new_account->TVC_levels[1] = 0;
+
+        new_account->investments = NULL;
+        new_account->last_investment = NULL;
+
+        new_account->rank = 0;
+
+        new_account->highest_leg_ranks[0] = 0.0;
+        new_account->highest_leg_ranks[1] = 0.0;
+        new_account->highest_leg_ranks[2] = 0.0;
+
+        fscanf(fin,
+            "%f\x1"
+            "%f\x1"
+            "%f\x1"
+            "%f\x1"
+            "%ld\x1"
+            "%f\x1"
+            "%f\x1"
+            "%f\x1"
+            "%f\x1"
+            "%f\x1"
+            "%d\x1"
+            "%d\x1"
+            "%d\x1"
+            "%d\x1",
+            &(new_account->pv), &(new_account->available_balance), &(new_account->total_returns),
+            &(new_account->total_redeems), &uplink_id, new_account->leg_volumes,
+            &(new_account->leg_volumes[1]), &(new_account->leg_volumes[2]),
+            new_account->TVC_levels, &(new_account->TVC_levels[1]), &(new_account->rank),
+            new_account->highest_leg_ranks, &(new_account->highest_leg_ranks[1]),
+            &(new_account->highest_leg_ranks[2])
+        );
+        
+        new_account->uplink = get_account_by_id(uplink_id);
+
+        string_length = 0;
+        string_index = 0;
+        fscanf(fin,"%ld\x1",&string_length);
+
+        new_account->names = malloc(sizeof(char)*(string_length+1));
+        if(new_account->names==NULL){gfree(new_account); memerror(stdout);}
+        while(string_length)
+        {
+            fscanf(fin,"%c",&(new_account->names[string_index]));
+            --string_length;
+            ++string_index;
+        } new_account->names[string_index]='\0';
+
+        number_of_items = 0;
+        fscanf(fin,"%ld\x1",&number_of_items);
+
+        if(number_of_items)
+        {
+            while(number_of_items)
+            {
+                fscanf(fin,"%ld\x1",&child_id);
+                
+                new_child_p = (Child)malloc(sizeof(struct child));
+                if(new_child_p==NULL)
+                    {gfree(new_account->names); gfree(new_account); memerror(stdout);}
+                
+                new_child_p->id = child_id;
+                new_child_p->uplink_id = id;
+                new_child_p->next = NULL;
+                
+                if(child_p==NULL)
+                    child_p = new_child_p;
+                else
+                    last_child_p->next = new_child_p;
+                
+                last_child_p = new_child_p;
+                
+                --number_of_items;
+            }
+        }
+
+        number_of_items = 0;
+        fscanf(fin,"%ld\x1",&number_of_items);
+
+        if(number_of_items)
+        {
+            while(number_of_items)
+            {
+                new_commission = (Commission)malloc(sizeof(struct commission));
+                if(new_commission==NULL)
+                {
+                    /* perform garbage collection on all malloc'd data */
+                    gfree(new_account->names);
+                    /* the created child_pointers (child_p) are left out...LOOK INTO THIS*/
+                    gfree(new_account);
+                    memerror(stdout);
+                }
+                
+                new_commission->amount = 0;
+                new_commission->reason = NULL;
+                new_commission->next = NULL;
+                new_commission->prev = NULL;
+                
+                fscanf(fin,"%f\x1",&new_commission->amount);
+
+                string_length = 0;
+                string_index = 0;
+                fscanf(fin,"%ld\x1",&string_length);
+
+                new_commission->reason = malloc(sizeof(char)*(string_length+1));
+                if(new_commission->reason==NULL)
+                    {gfree(new_account->names); gfree(new_account); memerror(stdout);}
+                
+                while(string_length)
+                {
+                    fscanf(fin,"%c",&(new_commission->reason[string_index]));
+                    --string_length;
+                    ++string_index;
+                } new_commission->reason[string_index]='\0';
+                
+                if(new_account->commissions==NULL) new_account->commissions=new_commission;
+                else
+                {
+                    new_account->last_commission->next=new_commission;
+                    new_commission->prev = new_account->last_commission;
+                }
+                new_account->last_commission = new_commission;
+
+                --number_of_items;
+            }
+        }
+
+        number_of_items = 0;
+        fscanf(fin,"%ld\x1",&number_of_items);
+
+        if(number_of_items)
+        {
+            while(number_of_items)
+            {
+                new_investment = (Investment)malloc(sizeof(struct investment));
+                if(new_investment==NULL)
+                {
+                    /* garbage collection */
+                    gfree(new_account->names); 
+                    
+                    Commission c = new_account->commissions;
+                    while(c!=NULL)
+                    {
+                        gfree(c->reason);
+                        c = c->next;
+                    }
+                    gfree(new_account); 
+                    memerror(stdout);
+                }
+
+                new_investment->amount = 0;
+                new_investment->package = NULL;
+                new_investment->package_id = 0;
+
+                new_investment->returns = 0;
+                new_investment->months_returned = 0;
+
+                new_investment->next = NULL;
+                new_investment->prev = NULL;
+
+                fscanf(fin, "%ld\x1%f\x1%ld\x1%f\x1%d\x1",
+                    &(new_investment->date), &(new_investment->amount),  
+                    &(new_investment->package_id), &(new_investment->returns), 
+                    &(new_investment->months_returned)
+                );
+
+                string_length = 0;
+                string_index = 0;
+                fscanf(fin,"%ld\x1",&string_length);
+
+                new_investment->package = malloc(sizeof(char)*(string_length+1));
+                if(new_investment->package==NULL)
+                {
+                    gfree(new_account->names); 
+                    
+                    Commission c = new_account->commissions;
+                    while(c!=NULL)
+                    {
+                        gfree(c->reason);
+                        p_commission = c;
+                        c = c->next;
+                        gfree(p_commission);
+                    }
+                    gfree(new_investment);
+                    gfree(new_account); 
+                    memerror(stdout);                
+                }
+                
+                while(string_length)
+                {
+                    fscanf(fin,"%c",&(new_investment->package[string_index]));
+                    --string_length;
+                    ++string_index;
+                } new_investment->package[string_index]='\0';
 
 
+                if(new_account->investments==NULL) new_account->investments=new_investment;
+                else
+                {
+                    new_account->last_investment->next=new_investment;
+                    new_investment->prev = new_account->last_investment;
+                }
+                new_account->last_investment = new_investment;
+                
+
+                
+                --number_of_items;
+            }
+        }
+
+        acc_p = (AccountPointer)malloc(sizeof(struct account_pointer));
+        if(acc_p==NULL)
+        {
+            gfree(new_account->names); 
+            
+            Commission c = new_account->commissions;
+            while(c!=NULL)
+            {
+                gfree(c->reason);
+                p_commission = c;
+                c = c->next;
+                gfree(p_commission);
+            }
+            Investment inv = new_account->investments;
+            while(inv!=NULL)
+            {
+                gfree(inv->package);
+                p_investment = inv;
+                inv = inv->next;
+                gfree(p_investment);
+            }
+            gfree(new_account); 
+            memerror(stdout);                
+        }
+        acc_p->account = new_account;
+        acc_p->next=NULL;
+        acc_p->prev=NULL;
+
+        if(HEAD->next==NULL) HEAD->next=acc_p;
+        else
+        {
+            TAIL->next=acc_p;
+            acc_p->prev=TAIL;
+        }
+        
+        TAIL = acc_p;
+
+        CURRENT_ID = id; /* the current ID is based on saved data!*/
+    }
+
+    /* now that all accounts have been loaded, we can properly allocate direct children */
+    Account uplink_account, child_account;
+    while(child_p!=NULL)
+    {
+        uplink_account = get_account_by_id(child_p->uplink_id);
+        child_account = get_account_by_id(child_p->id);
+        
+        acc_p = (AccountPointer)malloc(sizeof(struct account_pointer));
+        if(acc_p==NULL)
+        {
+            /* congs, we just robbed an uplink of their direct child. this destroys everything
+               from destroying leg volumes to robbing people of the FSB n all kinds of 
+               commissions :) :) :) :)
+            */
+            memerror(stdout);
+        }
+        
+        acc_p->account = child_account;
+        acc_p->next = NULL;
+        acc_p->prev = NULL;
+        
+        if(uplink_account->children==NULL) uplink_account->children=acc_p;
+        else
+        {
+            uplink_account->last_child->next=acc_p;
+            acc_p->prev=uplink_account->last_child;
+        }
+        
+        uplink_account->last_child = acc_p;
+
+        p_child_p = child_p;
+        child_p = child_p->next;
+        gfree(p_child_p);
+    }
+
+    structure_details(get_account_by_id(1));
 
     fclose(fin);
     
