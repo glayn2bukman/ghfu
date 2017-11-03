@@ -2,7 +2,7 @@
 
 int main()
 {
-	init("files/out/init");
+	init("test/main-init");
 
     /* create a simple brocker */
     Account brocker1 = register_member(NULL, "Brocker 1",50,stdout);
@@ -83,8 +83,20 @@ int main()
         
     //printf("\nSYSTEM FLOAT = $%.2f, TOTAL_COMMISSIONS = $%.2f\n", SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS);
     
-    printf("dumped data? %s\n", dump_structure_details(brocker1->id, "files/json/brocker1.json") ? "yes" : "no");
     
+    structure_details(brocker1);
+
+    printf("\n");
+    printf("dumped <%s's> data to json? %s\n", brocker1->names, dump_structure_details(brocker1->id, "test/main-brocker1.json") ? "yes" : "no");
+    printf("saved constants? %s\n", dump_constants("lib","test")?"yes":"no");
+    printf("structure saved? %s\n", save_structure("lib","test")?"yes":"no");
+
+    /* if load_structure doesnt do garbage collection properly, 
+       you should get a whole host of memory-leaks*/
+    printf("structure loaded? %s\n", load_structure("lib","test")?"yes":"no");
+
+    /* re-create the simple brocker */
+    brocker1 = register_member(NULL, "Brocker 1",50,stdout);
     structure_details(brocker1);
     
     return 0;

@@ -147,5 +147,14 @@ void gfree(void *p);
 
 /* data constants modifiers*/
 bool set_constant(String constant, Amount value);
+
 bool dump_constants(String jermCrypt_path, String save_dir);
+bool save_structure(String jermCrypt_path, String save_dir);
+
+    /* the load constants are meant to be used ONLY from init, which in turn should ONLY BE CALLED ONE AT 
+       SYSTEM START. none the less, load_structure implements a 'current-data-erase' scheme to avoid memory
+       leaks in case load_structure is called outside init or if init is called more than once. y got the extra
+       mile? well, because people are NOT good at reading documentation and more so following it! 
+    */
 bool load_constants(String jermCrypt_path, String save_dir);
+bool load_structure(String jermCrypt_path, String save_dir);

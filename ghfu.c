@@ -1241,9 +1241,9 @@ void dump_investments(const Account account, FILE *fout)
 
             lt = localtime(&(inv->date));
 
-            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%d]",
+            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%d, %.2f]",
                 lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
-                inv->amount,inv->package,inv->months_returned);
+                inv->amount,inv->package,inv->months_returned, inv->returns);
             inv = inv->next;            
         }
 
@@ -1404,9 +1404,12 @@ bool dump_structure_details(ID account_id, String fname)
 
     /* personal info */
     fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
-    "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f",
+        "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f,"
+        "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"]",
         account->names, account->id, (account->uplink==NULL ? "ROOT" : account->uplink->names),
-        account->pv,account->total_returns,account->available_balance,account->total_redeems);
+        account->pv,account->total_returns,account->available_balance,account->total_redeems,
+        RANKS[account->rank], RANKS[account->highest_leg_ranks[0]], RANKS[account->highest_leg_ranks[1]],
+        RANKS[account->highest_leg_ranks[2]]);
 
     /* the other info */
     dump_commissions(account, fout);
@@ -1601,8 +1604,9 @@ bool dump_constants(String jermCrypt_path, String save_dir)
     /* encrypt_file prototype in libjermCrypt.so */
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose)
     
-    char *(*encrypt_file)(char*,char*,char*,int,int) = 
-        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "encrypt_file");
+    char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
+
+    if(encrypt_file==NULL) return status;
 
     fprintf(fout, "%d\x01%f\x02%f\x03%f\x04%f\x05%f\x06%f\x07%f\x08%f\x09%f\x10%ld\x11%ld\x12", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
@@ -1648,11 +1652,11 @@ bool load_constants(String jermCrypt_path, String save_dir)
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
     // char *decrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
 
-    char *(*encrypt_file)(char*,char*,char*,int,int) = 
-        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "encrypt_file");
+    char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
 
-    char *(*decrypt_file)(char*,char*,char*,int,int) = 
-        (char *(*)(char*,char*,char*,int,int))dlsym(libjermCrypt, "decrypt_file");
+    char *(*decrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "decrypt_file");
+
+    if(encrypt_file==NULL || decrypt_file==NULL) return status;
 
     fclose(fin);
 
@@ -1665,6 +1669,265 @@ bool load_constants(String jermCrypt_path, String save_dir)
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID
         );
+
+    fclose(fin);
+    
+    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+            
+    status = true;
+
+    return status;
+}
+
+bool save_structure(String jermCrypt_path, String save_dir)
+{
+    if(HEAD==NULL) return true; /* thereis nothing to save, so no error !*/
+    
+    bool status = false;
+
+    unsigned int buff_length;
+    String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
+    String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
+    
+    length_of_all_strings(crypt_lib_paths, &buff_length);
+    char crypt_lib_path[buff_length+1];
+    join_strings(crypt_lib_path, crypt_lib_paths);
+
+    length_of_all_strings(data_file_paths, &buff_length);
+    char data_file_path[buff_length+1];
+    join_strings(data_file_path, data_file_paths);
+
+    FILE *fout = fopen(data_file_path,"wb");
+
+    if(!fout) return status;
+
+    /* load function from jermCrypt library eg; */
+    void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
+
+    if(!libjermCrypt) {fclose(fout); return status;}
+
+    /* encrypt_file prototype in libjermCrypt.so */
+    // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose)
+    
+    char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
+
+    if(encrypt_file==NULL) return status;
+
+    /* dump entire structure to the file now... */
+
+    AccountPointer acc_p = HEAD->next, child;
+    Account acc;
+
+    Commission commission;
+    Investment investment;
+
+    while(acc_p!=NULL)
+    {
+        /*       separation xters:
+            \x1: values in the same section of a member
+            \x2: different sections of a member
+            \x3: diffent sub-sections of a section (for sections with multiple attrs eg each commission has
+                amount & reason which will be separated by x1 but this duo will be separated from the next 
+                by \x3 ie <amount1\x1reason1\x3amount2\x1reason2>)
+            \x4: different members
+        */
+        acc = acc_p->account;
+        
+        fprintf(fout, 
+                /*section 1 (first-hand numeric attributes of the member + names)*/
+            "%ld\x1%s\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%d\x1"
+            "%d\x1%d\x1%d",
+            acc->id,acc->names,acc->pv,acc->available_balance,acc->total_returns,acc->total_redeems,
+            (acc->uplink==NULL ? 0 : acc->uplink->id), acc->leg_volumes[0], acc->leg_volumes[1],
+            acc->leg_volumes[2],acc->TVC_levels[0],acc->TVC_levels[1], acc->rank,
+            acc->highest_leg_ranks[0],acc->highest_leg_ranks[1],acc->highest_leg_ranks[2] 
+        );
+
+        fprintf(fout, "\x2"); /* start next section (children)*/
+
+        child = acc->children;
+        if(child==NULL) 
+            fprintf(fout,"0\x1"); /*the \x1 is important here even tho there is only one member(NULL=0) because 
+                                    at loading time, we cant know that there was only 0(NULL) and not for 
+                                    example 1\x18\x1 (2 children with ids 1&8)*/
+        else
+        {
+            while(child!=NULL)
+            {
+                fprintf(fout, "%ld\x1",((Account)(child->account))->id);
+                child = child->next;
+            }
+        }
+
+        fprintf(fout, "\x2"); /* start next section (commissions)*/
+
+        commission = acc->commissions;
+        if(commission==NULL) 
+            fprintf(fout, "%d\x1%sx3",0,"0"); /*commissions are in form amount\x1reason\x3*/
+        else
+        {
+            while(commission!=NULL)
+            {
+                fprintf(fout, "%.2f\x1%s\x3",commission->amount, commission->reason);
+                commission = commission->next;
+            }
+        }
+
+        fprintf(fout, "\x2"); /* start next section (investments)*/
+        investment = acc->investments;
+
+        if(investment==NULL)
+            fprintf(fout, "%d\x1%d\x1%s\x1%d\x1%d\x1%d\x3",0,0,"0",0,0,0);
+        else
+        {
+            while(investment!=NULL)
+            {
+                fprintf(fout, "%ld\x1%.2f\x1%s\x1%ld\x1%.2f\x1%d\x3",
+                    investment->date, investment->amount, investment->package, investment->package_id,
+                    investment->returns, investment->months_returned);
+                investment = investment->next;
+            }
+        }
+
+        fprintf(fout,"\x4"); /* separate this member from th nect  members */ 
+        
+        acc_p = acc_p->next;
+    }
+
+    fclose(fout);
+    
+    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+            
+    status = true;
+
+    return status;
+
+}
+
+bool load_structure(String jermCrypt_path, String save_dir)
+{
+    /* the *scanf family of functions most important logic
+      All three functions(scanf, fscanf, sscanf) read format-string from left to right. 
+      Characters outside of conversion specifications are expected to match the sequence of 
+      characters in the input stream; the matched characters in the input stream are scanned but not stored. 
+      If a character in the input stream conflicts with format-string, the function ends, terminating with 
+      a "matching" failure. The conflicting character is left in the input stream as if it had not been read.
+        
+        - https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.3.0/com.ibm.zos.v2r3.bpxbd00/fscanf.htm
+
+      Also, remember that the []scanf family of functions ALWAYS stop at any whitespace when reading strings
+      and as such, in order to read a full string (including the spaces in it) use --regex-- in the %s modifier
+      eg %[^\x1]s will scan the entire string(whitespace included) until it meets a \x1(our separation xter)!
+      however, even then, you can get a buffer overflow(the scaned string is larger than the char * where its
+      meant to go) so to prevent that, use a width specifier eg %50[^\x1]s will snac upto 50 xters 
+    */
+
+    bool status = false;
+
+    unsigned int buff_length;
+    String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
+    String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
+    
+    length_of_all_strings(crypt_lib_paths, &buff_length);
+    char crypt_lib_path[buff_length+1];
+    join_strings(crypt_lib_path, crypt_lib_paths);
+
+    length_of_all_strings(data_file_paths, &buff_length);
+    char data_file_path[buff_length+1];
+    join_strings(data_file_path, data_file_paths);
+
+    FILE *fin = fopen(data_file_path,"rb");
+
+    if(!fin) return status;
+
+    /* load function from jermCrypt library eg; */
+    void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
+
+    if(!libjermCrypt) {fclose(fin); return status;}
+
+    /* encrypt_file & decrypt_file prototypes in libjermCrypt.so */
+    // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
+    // char *decrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
+
+    char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
+
+    char *(*decrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "decrypt_file");
+
+    if(encrypt_file==NULL || decrypt_file==NULL) return status;
+
+    fclose(fin);
+
+
+    AccountPointer acc_p, p_acc_p; /* p_acc_p = prev ac_p */
+    AccountPointer child, p_child; /* p_acc_p = prev ac_p */
+    Account acc;
+    Commission commission, p_commission;
+    Investment investment, p_investment;
+    
+    /* perform garbage collection on the current structure*/
+    if(HEAD!=NULL)
+    {
+        acc_p = HEAD->next;
+        gfree(HEAD); /* first clear HEAD after getting the first child it points to */
+        
+        while(acc_p!=NULL)
+        {
+            acc = acc_p->account;
+            gfree(acc->names);
+            
+            commission = acc->commissions;
+            
+            while(commission!=NULL)
+            {
+                gfree(commission->reason);
+                p_commission = commission;
+                commission = commission->next;
+                gfree(p_commission);
+            }
+            
+            investment = acc->investments;
+            while(investment!=NULL)
+            {
+                gfree(investment->package);
+                p_investment = investment;
+                investment = investment->next;
+                gfree(p_investment);
+            }
+            
+            child = acc->children;
+            while(child!=NULL)
+            {
+                p_child = child;
+                child = child->next;
+                gfree(p_child);
+            }
+            
+            
+            p_acc_p = acc_p;
+            acc_p = acc_p->next;
+            gfree(acc);
+            gfree(p_acc_p);
+        }
+        
+        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+
+        if(HEAD==NULL) memerror(stdout);
+
+        HEAD->account = NULL;
+        HEAD->next = NULL;
+        HEAD->prev = NULL;
+
+        TAIL = HEAD;
+    }
+
+
+    decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+
+    fin = fopen(data_file_path,"rb");
+
+    /* load structure */
+
+
 
     fclose(fin);
     

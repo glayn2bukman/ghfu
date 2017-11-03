@@ -18,7 +18,7 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, time
+import os, sys, json, time, threading
 
 from ctypes import *
 
@@ -104,7 +104,7 @@ def client_known(addr):
     if not(os.path.isfile(os.path.join(path,"Server","known_clients"))):
         with open(os.path.join(path,"Server","known_clients"), "w") as f: f.write(known_clients)
     with open(os.path.join(path,"Server","known_clients"), "r") as f:
-        known = f.read().strip().split("\n")
+        known = [c.strip() for c in f.read().strip().split("\n")]
         for client in known:
             if addr==client: return True
     return False
@@ -194,7 +194,7 @@ def details():
             "total_redeems": float,
             "commissions": [[float amount, str reason],...],
             "leg_volumes": [float leg-1-volume, float leg-2-volume, float leg-3-volume],
-            "investments": [[str date, float points, str package, int months_returned],...],
+            "investments": [[str date, float points, str package, int months_returned, returns],...],
             "direct_children":[str child1_names, str child2_names,.....] /* names NOT ids, again, its for 
                                                                             for security reasons */
         }

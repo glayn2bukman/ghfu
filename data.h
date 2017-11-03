@@ -1,7 +1,8 @@
 /* the jermCrypt library */
-char * JERM_CRYPT_LIB = "libjermCrypt.so";
-char * DATA_FILE = "data.ghfu";
-char * JERM_CRYPT_PASSWORD = "j<ermG.hfuCrypt>";
+char *JERM_CRYPT_LIB = "libjermCrypt.so";
+char *DATA_FILE = "data.ghfu";
+char *STRUCTURE_FILE = "structure.ghfu";
+char *JERM_CRYPT_PASSWORD = "j<ermG.hfuCrypt>";
 
 /* the conversion factor from amount($) to points */
 #define TBB_MAX_GENERATIONS 7
