@@ -1,10 +1,10 @@
 """
-the server program, in debugging mode, Ctrl-C/Z might not stop the program completely (it has multiple 
-main threads running). in that case, you'll get a "port already taken" error when you attempt to re-run the 
-server. if that happens, run;
-    $ netstat -tulpn | grep $(PORT=54321; echo $PORT) # set PORT to whatever port is being used
-and when you get the PID (in the last column ie PID/python), kill the process with
-    $ kill -9 PID
+    the server program, in debugging mode, Ctrl-C/Z might not stop the program completely (it has multiple 
+    main threads running). in that case, you'll get a "port already taken" error when you attempt to re-run the 
+    server. if that happens, run;
+        $ netstat -tulpn | grep $(PORT=54321; echo $PORT) # set PORT to whatever port is being used
+    and when you get the PID (in the last column ie PID/python), kill the process with
+        $ kill -9 PID
 """
 # the most important interfaces to the dynamic library (libjermGHFU.so) are;
 #   ID account_id(Account account);
@@ -417,7 +417,7 @@ def invest():
 
     return reply_to_remote(jencode(reply))
 
-app.route("/auto-refills", methods=["POST"])
+@app.route("/auto-refills", methods=["POST"])
 def update_auto_refills():
     """
      this task should be done monthly a day or two before payment day. infact martin's system should reming the 
@@ -434,12 +434,40 @@ def update_auto_refills():
     json_req = request.get_json()
     
     if not json_req:
-        reply["status"] = False
         reply["log"] = "server expects json here"
         return reply_to_remote(jencode(reply))
 
     data = json_req.get("data", [])
 
+    if not data:
+        reply["log"] = "no data found in request (key: data, value:array of 2-item-arrays)"
+        return reply_to_remote(jencode(reply))
+    
+    if not isinstance(data, list):
+        reply["log"] = "invalid data found in request. server expects array of 2-item-arrays as value of \"data\""
+        return reply_to_remote(jencode(reply))
+
+    for d in data:
+        if not isinstance(d, list):
+            reply["log"] = "malformed data found in request only 2-item arrays expected in array value of key data"
+            return reply_to_remote(jencode(reply))
+        if len(d)!=2:
+            reply["log"] = "malformed data found in request only 2-item arrays expected in array value of key data"
+            return reply_to_remote(jencode(reply))
+        for i in d:
+            if not (isinstance(i, int) or isinstance(i, float)):
+                reply["log"] = "malformed data found in request only 2-item arrays expected in array value of key data"
+                return reply_to_remote(jencode(reply))
+    
+    data.sort()
+    data.reverse()
+    data.append([0,0])
+    data = [tuple(pair) for pair in data]
+
+    global MONTHLY_AUTO_REFILLS
+    MONTHLY_AUTO_REFILLS = data[:]
+
+    reply["status"] = True
 
     return reply_to_remote(jencode(reply))
     

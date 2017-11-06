@@ -38,6 +38,13 @@ char *ERRORS[] = {
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
 };
 
+/* montlhy auto-refill percentages (defaults, lower limits) */
+float MONTHLY_AUTO_REFILL_PERCENTAGES[][2] = {
+    {375, 40},
+    {250, 40},
+    {125, 40},
+    {0, 0}
+};
 
 /* account types */
 char *ACCOUNTS[] = {

@@ -63,13 +63,12 @@ void init(String jermCrypt_path, String save_dir)
 
     fin = fopen(structure_file_path,"rb");
 
-    bool loaded_structure = false;
     if(fin) 
     {
         fclose(fin); /* you dont want load_structure to attempt opening this file when its already
                         opened in init
                      */
-        loaded_structure = load_structure(jermCrypt_path, save_dir);
+        load_structure(jermCrypt_path, save_dir);
     }
 
 }
@@ -1644,11 +1643,20 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     if(encrypt_file==NULL) return status;
 
-    fprintf(fout, "%d\x01%f\x02%f\x03%f\x04%f\x05%f\x06%f\x07%f\x08%f\x09%f\x10%ld\x11%ld\x12", 
+    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
         MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
         ACTIVE_ACCOUNTS,CURRENT_ID
         );
+
+    /* dump current auto-refill percentages */
+
+    int num_of_arps=0;
+    for(; MONTHLY_AUTO_REFILL_PERCENTAGES[num_of_arps][0]; ++num_of_arps);
+    fprintf(fout, "%d\x1", num_of_arps);
+    for(int i=0; i<(num_of_arps-1); ++i) /*dont dump the last {0,0} coz we are certain its always there! */
+        fprintf(fout, "%.2f\x1%.2f\x1", 
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i][0],MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
 
     fclose(fout);
     
@@ -1702,7 +1710,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fin = fopen(data_file_path,"rb");
 
-    fscanf(fin, "%d\x01%f\x02%f\x03%f\x04%f\x05%f\x06%f\x07%f\x08%f\x09%f\x10%ld\x11%ld\x12", 
+    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID
