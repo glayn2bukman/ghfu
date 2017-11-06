@@ -3,7 +3,9 @@
 int main()
 {
 	init("lib","test");
-    if(HEAD->next!=NULL) /* found daved structure, just load that and leave*/
+
+/*
+    if(HEAD->next!=NULL) // found daved structure, just load that and leave
     {
         structure_details(NULL);
         fprintf(stdout, "\nLOADED SAVED STRUCTURE\n");
@@ -14,7 +16,7 @@ int main()
     fprintf(stdout, "press enter to continue...");
     char c;
     fscanf(stdin, "%c",&c);
-
+*/
     /* create a simple brocker */
     Account brocker1 = register_member(NULL, "Brocker 1",50,stdout);
 
@@ -104,7 +106,7 @@ int main()
 
     /* if load_structure doesnt do garbage collection properly, 
        you should get a whole host of memory-leaks*/
-    printf("structure loaded? %s\n", load_structure("lib","test")?"yes":"no");
+    //printf("structure loaded? %s\n", load_structure("lib","test")?"yes":"no");
 
     /* re-create the simple brocker */
     brocker1 = register_member(NULL, "Brocker 1",50,stdout);

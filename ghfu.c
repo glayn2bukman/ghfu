@@ -18,49 +18,17 @@ void memerror(FILE *fout)
 
 void init(String jermCrypt_path, String save_dir)
 {
-    /* Should first destroy any open structures such as HEAD n TAIL, etc n reset all global values.
-       If there is a stored structure file, load that instead and then set al necessary variables
-       accordingly
-    */
+    /* init should ONLY BE CALLED ONCE, at stystem start */
 
     unsigned int buff_length;
-    String structure_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
-    
-    length_of_all_strings(structure_file_paths, &buff_length);
-    char structure_file_path[buff_length+1];
-    join_strings(structure_file_path, structure_file_paths);
-
-    FILE *fin = fopen(structure_file_path,"rb");
-
-    bool loaded_structure = false;
-    if(fin) 
-    {
-        fclose(fin); /* you dont want load_structure to attempt opening this file when its already
-                        opened in init
-                     */
-        loaded_structure = load_structure(jermCrypt_path, save_dir);
-    }
-    
-    if(!loaded_structure)
-    {
-        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
-
-        if(HEAD==NULL) memerror(stdout);
-
-        HEAD->account = NULL;
-        HEAD->next = NULL;
-        HEAD->prev = NULL;
-
-        TAIL = HEAD;
-    }
-    
+        
     String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
     
     length_of_all_strings(data_file_paths, &buff_length);
     char data_file_path[buff_length+1];
     join_strings(data_file_path, data_file_paths);
 
-    fin = fopen(structure_file_path,"rb");
+    FILE *fin = fopen(data_file_path,"rb");
 
     if(fin)
     {
@@ -76,6 +44,34 @@ void init(String jermCrypt_path, String save_dir)
 
         CURRENT_ID = 0; /* only increments, never the opposite */
     }
+
+    HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+
+    if(HEAD==NULL) memerror(stdout);
+
+    HEAD->account = NULL;
+    HEAD->next = NULL;
+    HEAD->prev = NULL;
+
+    TAIL = HEAD;
+
+    String structure_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
+    
+    length_of_all_strings(structure_file_paths, &buff_length);
+    char structure_file_path[buff_length+1];
+    join_strings(structure_file_path, structure_file_paths);
+
+    fin = fopen(structure_file_path,"rb");
+
+    bool loaded_structure = false;
+    if(fin) 
+    {
+        fclose(fin); /* you dont want load_structure to attempt opening this file when its already
+                        opened in init
+                     */
+        loaded_structure = load_structure(jermCrypt_path, save_dir);
+    }
+
 }
 
 void increment_pv(Account account, const Amount points, FILE *fout)
@@ -330,7 +326,7 @@ bool invest(ID account_id, const Amount amount, const String package, const ID p
 
 bool invest_money(Account account, Amount amount, String package, ID package_id, bool update_system_float, FILE *fout)
 {
-    if(account==NULL) {fprintf(fout,"could not create investment for NULL account!\n"); return false;}
+    if(account==NULL) {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
 
     amount -= OPERATIONS_FEE;
     if(amount<0){ printf("failed to invest for <%s>...", account->names); ghfu_warn(4,fout); return false; }
@@ -401,11 +397,16 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
 ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name)
 {
-    /* python/java/etc interface to register_member */
-    FILE *fout = fopen(fout_name,"w");
-
     /* if return value==0, error occured, otherwise, new account ID is returned */
-    ID new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
+
+    /* python/java/etc interface to register_member */
+    FILE *fout = fopen(fout_name,"a");
+
+    ID new_id;
+
+    if(uplink_id && get_account_by_id(uplink_id)==NULL){fprintf(fout, "uplink does not exist!"); new_id=0;}
+    else
+        new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
     
     fclose(fout);
     
@@ -1557,7 +1558,7 @@ ID account_id(Account account)
     return account->id;
 }
 
-void monthly_operations(float auto_refill_percentages[4][2], FILE *fout)
+void monthly_operations(float auto_refill_percentages[][2], FILE *fout)
 {
 
     /* perform all monthly operations */
@@ -1566,7 +1567,7 @@ void monthly_operations(float auto_refill_percentages[4][2], FILE *fout)
     award_rank_monthly_bonuses(NULL, fout);
 }
 
-void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name)
+void perform_monthly_operations(float auto_refill_percentages[][2], String fout_name)
 {
     /* python/java/etc interface to monthly_operations */
     FILE *fout = fopen(fout_name, "w");
@@ -1651,9 +1652,11 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     fclose(fout);
     
-    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
             
     status = true;
+
+    dlclose(libjermCrypt);
 
     return status;
 }
@@ -1695,7 +1698,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fclose(fin);
 
-    decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
 
     fin = fopen(data_file_path,"rb");
 
@@ -1707,9 +1710,10 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fclose(fin);
     
-    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
             
     status = true;
+    dlclose(libjermCrypt);
 
     return status;
 }
@@ -1746,7 +1750,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
     
     char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
 
-    if(encrypt_file==NULL) return status;
+    if(encrypt_file==NULL) {dlclose(libjermCrypt); return status;}
 
     /* dump entire structure to the file now... */
 
@@ -1894,9 +1898,10 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     fclose(fout);
     
-    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
             
     status = true;
+    dlclose(libjermCrypt);
 
     return status;
 
@@ -1951,7 +1956,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     char *(*decrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "decrypt_file");
 
-    if(encrypt_file==NULL || decrypt_file==NULL) return status;
+    if(encrypt_file==NULL || decrypt_file==NULL) {dlclose(libjermCrypt); return status;}
 
     fclose(fin);
 
@@ -1966,7 +1971,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
     unsigned long number_of_items, child_id, string_index, string_length;
     
     /* perform garbage collection on the current structure*/
-    if(HEAD!=NULL)
+    if(HEAD->next!=NULL)
     {
         acc_p = HEAD->next;
         gfree(HEAD); /* first clear HEAD after getting the first child it points to */
@@ -2020,21 +2025,8 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
         TAIL = HEAD;
     }
-    else
-    {
-        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
 
-        if(HEAD==NULL) memerror(stdout);
-
-        HEAD->account = NULL;
-        HEAD->next = NULL;
-        HEAD->prev = NULL;
-
-        TAIL = HEAD;
-    }
-
-
-    decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
 
     fin = fopen(data_file_path,"rb");
 
@@ -2048,7 +2040,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     Child child_p=NULL;
     unsigned long number_of_items;
-*/
+*/    
     ID id, uplink_id;
     while(fscanf(fin, "%ld\x1", &id)!=EOF)
     {
@@ -2362,9 +2354,10 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     fclose(fin);
     
-    encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
             
     status = true;
+    dlclose(libjermCrypt);
 
     return status;
 }

@@ -151,8 +151,8 @@ void join_strings(char buff[], const String strings[]);
 Account get_account_by_id(const ID id);
 ID account_id(Account account);
 
-void monthly_operations(float auto_refill_percentages[4][2], FILE *fout);
-void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
+void monthly_operations(float auto_refill_percentages[][2], FILE *fout);
+void perform_monthly_operations(float auto_refill_percentages[][2], String fout_name);
 
 void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
 void gfree(void *p);

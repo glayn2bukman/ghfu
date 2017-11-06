@@ -45,7 +45,10 @@ for i in range(len(root_accounts)):
 account_ids = root_account_ids + fgen_account_ids + sgen_account_ids
 
 # set payment date to today and start payment
-c_int.in_dll(libghfu, "PAYMENT_DAY").value = time.gmtime()[2]
+#raw_input("current PAYMENT_DAY is {}...press enter to set it to today...".format(
+#    c_int.in_dll(libghfu, "PAYMENT_DAY").value))
+pd_set = libghfu.set_constant("payment-day", c_float(time.gmtime()[2]))
+if not pd_set: sys.exit("failed to set payment day. this cant be good. exitting test!")
 
 libghfu.perform_monthly_operations(
     ((c_float*2)*4)((375,64), (250,60), (125,49), (0,0)), 
@@ -61,7 +64,9 @@ for account_id in account_ids:
     else:
         raw_input("ERROR in dumping account id %d. press enter to continue..."%account_id)
 
-# now dump structure
+print "system float = $%.2f"%c_float.in_dll(libghfu, "SYSTEM_FLOAT").value
+
+# now save and load data to/from disk
 print "dumped constants?","yes" if libghfu.dump_constants(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"
 print "loaded constants?", "yes" if libghfu.load_constants(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"
 print "saved structure?", "yes" if libghfu.save_structure(os.path.join(root,"lib"), os.path.join(root,"test")) else "no"

@@ -1,3 +1,11 @@
+"""
+the server program, in debugging mode, Ctrl-C/Z might not stop the program completely (it has multiple 
+main threads running). in that case, you'll get a "port already taken" error when you attempt to re-run the 
+server. if that happens, run;
+    $ netstat -tulpn | grep $(PORT=54321; echo $PORT) # set PORT to whatever port is being used
+and when you get the PID (in the last column ie PID/python), kill the process with
+    $ kill -9 PID
+"""
 # the most important interfaces to the dynamic library (libjermGHFU.so) are;
 #   ID account_id(Account account);
 #   bool dump_structure_details(ID account_id, String fout_name); 
@@ -35,6 +43,9 @@ libghfu.purchase_property.argtypes = [c_long, c_float, c_int, c_char_p, c_char_p
 libghfu.redeem_account_points.argtypes = [c_long, c_float, c_char_p]
 libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
 libghfu.set_constant.argtypes = [c_char_p, c_float]
+libghfu.save_structure.argtypes = [c_char_p, c_char_p]
+
+libghfu.account_id.restype = c_long
 
 # libghfu.perform_monthly_operations is called as follows
 #   data = [(375,64),(250,60),(125,49),(0,0)]
@@ -43,42 +54,35 @@ libghfu.set_constant.argtypes = [c_char_p, c_float]
 #   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
 #      condition in libghfu
 
-# define Account(struct account), AccountPointer (struct account_pointer), Commission(struct commission)
-# and Investment (struct investment); libghfu struct derivatives for python (will save account-search time)
-"""
-class Investment(Structure):pass
-Investment._fields_ = [
-    ("date",c_long), ("amount",c_float), ("package", c_char_p), ("package_id", c_long),
-    ("returns", c_float), ("months_returned", c_int), ("next",POINTER(Investment)),
-    ("next",POINTER(Investment))
-]
-
-class Commission(Structure):pass
-Commission._fields_ = [
-    ("reason",c_char_p), ("amount",c_float),("next",POINTER(Commission)),("prev",POINTER(Commission))
-]
-
-class AccountPointer(Structure):pass
-AccountPointer._fields_ = [
-    ("account",c_void_p), ("next",POINTER(AccountPointer)), ("prev",POINTER(AccountPointer))
-]
-
-class Account(Structure):pass
-Account._fields_ = [
-    ("id",c_long), ("names",c_char_p),("pv",c_float),("available_balance",c_float),
-    ("total_returns",c_float), ("total_redeems", c_float),("uplink", POINTER(Account)),
-    ("children",POINTER(AccountPointer)), ("last_child",POINTER(AccountPointer)),
-    ("commissions",POINTER(Commission)), ("last_commission",POINTER(Commission)),
-    ("leg_volumes", c_float*3), ("TVC_levels",c_float*2), ("investments",POINTER(Investment)),
-    ("last_investment",POINTER(Investment)), ("rank",c_int), ("highest_leg_ranks",c_int*3)
-] 
-"""
+MONTHLY_AUTO_REFILLS = (
+    # ALWAYS in DESCENDING ORDER OF pv
+    # the last item is ALWAYS (0,0). this is the termination condition in libjermGHFU.so
+    (375, 40),
+    (250, 40),
+    (125, 40),
+    (0, 0, 0)
+    
+    # this data are the default percentages used for monthly auto-refills
+)
 
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
+
+UPDATE_STRUCTURE = 0
+update_sleep_time = 0.1
+
+# the all-important functions that ensures the live structure is updated whenever necessary
+def update_structure():
+    global UPDATE_STRUCTURE
+    while 1: # run as long as the server is active
+        if UPDATE_STRUCTURE:
+            if not libghfu.save_structure(os.path.join(path,"lib"), os.path.join(path,"files","saves")):
+                print "STRUCTURE NOT SAVED! YOU WANNA LOOK INTO THIS"
+            UPDATE_STRUCTURE = 0
+        time.sleep(update_sleep_time)
 
 # remove used uncessesary file
 def rm(f):
@@ -123,6 +127,8 @@ def test():
 def register():
     """ if returned json has <id> set to 0, check for the log from key <log>"""
 
+    global UPDATE_STRUCTURE
+
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -155,26 +161,24 @@ def register():
     if not names:
         reply["log"] = "silly data provided; parameter <names>"
         return reply_to_remote(jencode(reply))
-    if (deposit==-1 or isinstance(deposit,unicode) or (not (type(deposit)!=type(0) or type(deposit)!=type(0.0)))):
+    if (deposit<0 or isinstance(deposit,unicode) or (not (type(deposit)!=type(0) or type(deposit)!=type(0.0)))):
         reply["log"] = "silly data provided; parameter <deposit>"
         return reply_to_remote(jencode(reply))
     
-    if uplink_id and (not libghfu.account_id(libghfu.get_account_by_id(uplink_id))):
-        reply["log"] = "uplink does not exist!"
-        return reply_to_remote(jencode(reply))
-
     # allow creating accounts with ROOT uplinks? i doubt 
-    elif uplink_id==0:
+    if uplink_id==0:
         reply["log"] = "you dont have the permission to add accounts to ROOT!"
         return reply_to_remote(jencode(reply))
     else:
         logfile = file_path("{}".format(time.time()))
 
         account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
-        if account_id: reply["id"]=account_id
+        if account_id: 
+            reply["id"]=account_id
+            UPDATE_STRUCTURE = 1
         else: 
             reply["log"] = info(logfile)
-        
+    
         rm(logfile)
         
     return reply_to_remote(jencode(reply))
@@ -238,6 +242,8 @@ def details():
 def buy_package():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
 
+    global UPDATE_STRUCTURE
+
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -279,7 +285,9 @@ def buy_package():
     libghfu.purchase_property(IB_id, c_float(amount), is_member, buyer_names, logfile)
     if info(logfile):
         with open(logfile, "r") as f: reply["log"] = f.read()
-    else: reply["status"]=True
+    else: 
+        reply["status"]=True
+        UPDATE_STRUCTURE = 1
 
 
     rm(logfile)
@@ -314,6 +322,9 @@ def set_data_constants():
         POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
         OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT
     """
+
+    global UPDATE_STRUCTURE
+
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -321,10 +332,13 @@ def set_data_constants():
 
     json_req = request.get_json()
 
+    # libghfu.set_constant expects a FLOAT. giving it an INT will destroy saved structure files n all hell
+    # will break loose
+
     if json_req:
         for key in json_req:
             if(isinstance(json_req[key],int) or isinstance(json_req[key],float)):
-                reply[key] = libghfu.set_constant(key, json_req[key])
+                reply[key] = libghfu.set_constant(key, float(json_req[key]))
                 reply[key] = True if reply[key] else False
             else: reply[key]=False
     else:
@@ -335,12 +349,19 @@ def set_data_constants():
                 reply[key] = True if reply[key] else False
             except: reply[key]=False
 
+    for key in reply:
+        if reply[key]:
+            UPDATE_STRUCTURE = 1
+            break
+
     return reply_to_remote(jencode(reply))
 
 
 @app.route("/invest", methods=["POST"])
 def invest():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
+
+    global UPDATE_STRUCTURE
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -388,6 +409,7 @@ def invest():
     
     if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
         reply["status"]=True
+        UPDATE_STRUCTURE = 1
     else:
         reply["log"] = info(logfile)
 
@@ -395,11 +417,36 @@ def invest():
 
     return reply_to_remote(jencode(reply))
 
+app.route("/auto-refills", methods=["POST"])
+def update_auto_refills():
+    """
+     this task should be done monthly a day or two before payment day. infact martin's system should reming the 
+     necessary people about this atleast 2 days prior to payment!
+    """
+
+    global UPDATE_STRUCTURE
+
+    if not client_known(request.remote_addr): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["status"] = False
+        reply["log"] = "server expects json here"
+        return reply_to_remote(jencode(reply))
+
+    data = json_req.get("data", [])
+
+
+    return reply_to_remote(jencode(reply))
+    
+
 if __name__=="__main__":
-    libghfu.init(file_path("server-init")) # ==ALWAYS== INITIATE libghfu before you use it
-    init_error = info("server-init")
-    if init_error:
-        sys.exit(init_error)
+    # ==ALWAYS== INITIATE libghfu before you use it
+    libghfu.init(os.path.join(path,"lib"), os.path.join(path,"files","saves")) 
 
     # create contemporary member...to act as first member in case theere are no members yet in structure
     libghfu.register_new_member(0, "PSEUDO-ROOT",
@@ -407,5 +454,7 @@ if __name__=="__main__":
         c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value+180+500,
         file_path("pseudo-root"))
 
+    #update_structure_thread = threading.Thread(target=update_structure, args=())
+    #update_structure_thread.start()
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)
