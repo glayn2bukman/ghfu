@@ -54,34 +54,25 @@ libghfu.account_id.restype = c_long
 #   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
 #      condition in libghfu
 
-MONTHLY_AUTO_REFILLS = (
-    # ALWAYS in DESCENDING ORDER OF pv
-    # the last item is ALWAYS (0,0). this is the termination condition in libjermGHFU.so
-    (375, 40),
-    (250, 40),
-    (125, 40),
-    (0, 0, 0)
-    
-    # this data are the default percentages used for monthly auto-refills
-)
-
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
 
-UPDATE_STRUCTURE = 0
+DUMP_DATA = 0
 update_sleep_time = 0.1
 
 # the all-important functions that ensures the live structure is updated whenever necessary
 def update_structure():
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
     while 1: # run as long as the server is active
-        if UPDATE_STRUCTURE:
+        if DUMP_DATA:
             if not libghfu.save_structure(os.path.join(path,"lib"), os.path.join(path,"files","saves")):
                 print "STRUCTURE NOT SAVED! YOU WANNA LOOK INTO THIS"
-            UPDATE_STRUCTURE = 0
+            if not libghfu.dump_constants(os.path.join(path,"lib"), os.path.join(path,"files","saves")):
+                print "CONSTANTS NOT SAVED! YOU WANNA LOOK INTO THIS"
+            DUMP_DATA = 0
         time.sleep(update_sleep_time)
 
 # remove used uncessesary file
@@ -127,7 +118,7 @@ def test():
 def register():
     """ if returned json has <id> set to 0, check for the log from key <log>"""
 
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -175,7 +166,7 @@ def register():
         account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
         if account_id: 
             reply["id"]=account_id
-            UPDATE_STRUCTURE = 1
+            DUMP_DATA = 1
         else: 
             reply["log"] = info(logfile)
     
@@ -242,7 +233,7 @@ def details():
 def buy_package():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
 
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -287,7 +278,7 @@ def buy_package():
         with open(logfile, "r") as f: reply["log"] = f.read()
     else: 
         reply["status"]=True
-        UPDATE_STRUCTURE = 1
+        DUMP_DATA = 1
 
 
     rm(logfile)
@@ -323,7 +314,7 @@ def set_data_constants():
         OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT
     """
 
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -351,7 +342,7 @@ def set_data_constants():
 
     for key in reply:
         if reply[key]:
-            UPDATE_STRUCTURE = 1
+            DUMP_DATA = 1
             break
 
     return reply_to_remote(jencode(reply))
@@ -361,7 +352,7 @@ def set_data_constants():
 def invest():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
 
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -409,7 +400,7 @@ def invest():
     
     if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
         reply["status"]=True
-        UPDATE_STRUCTURE = 1
+        DUMP_DATA = 1
     else:
         reply["log"] = info(logfile)
 
@@ -424,7 +415,7 @@ def update_auto_refills():
      necessary people about this atleast 2 days prior to payment!
     """
 
-    global UPDATE_STRUCTURE
+    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -459,15 +450,22 @@ def update_auto_refills():
                 reply["log"] = "malformed data found in request only 2-item arrays expected in array value of key data"
                 return reply_to_remote(jencode(reply))
     
+    # ALWAYS in DESCENDING ORDER OF pv
+    # the last item is ALWAYS (0,0). this is the termination condition in libjermGHFU.so
     data.sort()
     data.reverse()
     data.append([0,0])
     data = [tuple(pair) for pair in data]
 
-    global MONTHLY_AUTO_REFILLS
-    MONTHLY_AUTO_REFILLS = data[:]
+    floats = (c_float*2)*len(data)
 
-    reply["status"] = True
+    reply["status"] = libghfu.update_monthly_auto_refill_percentages(
+        floats(*data),
+        os.path.join(path,"lib"),
+        os.path.join(path,"files","saves")
+    )
+    
+    reply["status"] = True if reply["status"] else False
 
     return reply_to_remote(jencode(reply))
     

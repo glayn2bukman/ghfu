@@ -102,6 +102,7 @@ int main()
     printf("\n");
     printf("dumped <%s's> data to json? %s\n", brocker1->names, dump_structure_details(brocker1->id, "test/main-brocker1.json") ? "yes" : "no");
     printf("saved constants? %s\n", dump_constants("lib","test")?"yes":"no");
+    printf("loaded constants? %s\n", load_constants("lib","test")?"yes":"no");
     printf("structure saved? %s\n", save_structure("lib","test")?"yes":"no");
 
     /* if load_structure doesnt do garbage collection properly, 
@@ -111,6 +112,10 @@ int main()
     /* re-create the simple brocker */
     brocker1 = register_member(NULL, "Brocker 1",50,stdout);
     structure_details(brocker1);
+    
+    printf("updated monthly-auto-refill %%ges? %s\n",
+        update_monthly_auto_refill_percentages(monhtly_auto_refill_percentages[3],"lib","test") ?
+        "yes" : "no");
     
     return 0;
 }

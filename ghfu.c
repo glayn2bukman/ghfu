@@ -43,9 +43,55 @@ void init(String jermCrypt_path, String save_dir)
         ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
 
         CURRENT_ID = 0; /* only increments, never the opposite */
+
+        /* monthly-aut-refills 
+            default values;
+                {
+                    {375, 40},
+                    {250, 40},
+                    {125, 40},
+                    {0, 0}
+                };
+
+        */
+        MONTHLY_AUTO_REFILL_PERCENTAGES = malloc(4*sizeof(float*));
+        if (MONTHLY_AUTO_REFILL_PERCENTAGES==NULL) memerror(stdout);
+        for(int i=0; i<4; ++i)
+        {
+            /* any malloc failure in here will lead into memory leaks IF memerror doesn't exit the system */
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i] = malloc(sizeof(float)*2);
+            if(MONTHLY_AUTO_REFILL_PERCENTAGES[i]==NULL) memerror(stdout);
+            switch(i)
+            {
+                case 0: 
+                    {
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 375; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
+                        break;
+                    }
+                case 1: 
+                    {
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 250; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
+                        break;
+                    }
+                case 2: 
+                    {
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 125; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
+                        break;
+                    }
+                case 3: 
+                    {
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 0; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 0; 
+                        break;
+                    }
+            }
+        }
     }
 
-    HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+    HEAD = malloc(sizeof(struct account_pointer));
 
     if(HEAD==NULL) memerror(stdout);
 
@@ -149,7 +195,7 @@ void award_commission(Account account, Amount points, String commission_type, St
     if(!points){ghfu_warn(8,fout); return;}
     if(account==NULL) {fprintf(fout,"could not award commissions for NULL account!\n"); return;}
     
-    Commission new_commission = (Commission)malloc(sizeof(struct commission));
+    Commission new_commission = malloc(sizeof(struct commission));
     if(new_commission==NULL) memerror(fout);
 
     new_commission->reason = NULL;
@@ -229,7 +275,7 @@ void award_commission(Account account, Amount points, String commission_type, St
             {
                 last_commission = uplink->last_commission;
 
-                uplink->last_commission = (Commission)malloc(sizeof(struct commission));
+                uplink->last_commission = malloc(sizeof(struct commission));
                 if(uplink->last_commission==NULL) memerror(fout);
 
                 uplink->last_commission->reason = NULL;
@@ -249,7 +295,7 @@ void award_commission(Account account, Amount points, String commission_type, St
                 /* create a new array to hold this commission reason (you cant just assign a local char[] to
                    new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                    EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-                uplink->last_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                uplink->last_commission->reason = malloc(sizeof(char)*(buff_length+1));
                 if(uplink->last_commission->reason==NULL) memerror(fout);
                 join_strings(uplink->last_commission->reason, reason_strings);
                 
@@ -281,7 +327,7 @@ void award_commission(Account account, Amount points, String commission_type, St
         /* create a new array to hold this commission reason (you cant just assign a local char[] to
            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+        new_commission->reason = malloc(sizeof(char)*(buff_length+1));
         if(new_commission->reason==NULL) memerror(fout); /* could do much better to rollback all changes 
                                                             but i dint coz memerror exits the program!*/
         join_strings(new_commission->reason,reason_strings);
@@ -333,7 +379,7 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(6,fout); return false; }
     if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(9,fout); return false; }
 
-    Investment new_investment = (Investment)malloc(sizeof(struct investment));
+    Investment new_investment = malloc(sizeof(struct investment));
     
     if(new_investment==NULL) memerror(fout);
 
@@ -360,7 +406,7 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     String reason_strings[] = {package, "\0"};
     length_of_all_strings(reason_strings, &buff_length);
 
-    new_investment->package = (String)malloc(sizeof(char)*(buff_length+1));
+    new_investment->package = malloc(sizeof(char)*(buff_length+1));
     if(new_investment->package==NULL) {gfree(new_investment); memerror(fout);}
     join_strings(new_investment->package,reason_strings);
 
@@ -420,7 +466,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(9,fout); return NULL; }
 
-    Account new_account = (Account)malloc(sizeof(struct account));
+    Account new_account = malloc(sizeof(struct account));
     
     if(new_account==NULL) memerror(fout);
 
@@ -457,7 +503,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     String name_strings[] = {names, "\0"};
     length_of_all_strings(name_strings, &buff_length);
 
-    new_account->names = (String)malloc(sizeof(char)*(buff_length+1));
+    new_account->names = malloc(sizeof(char)*(buff_length+1));
     if(new_account->names==NULL) {gfree(new_account); memerror(fout);}
     join_strings(new_account->names,name_strings);
 
@@ -471,7 +517,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
 
     
     /* add new_account to uplink's children and then give uplink FSB */
-    AccountPointer ap1 = (AccountPointer)malloc(sizeof(struct account_pointer));
+    AccountPointer ap1 = malloc(sizeof(struct account_pointer));
 
     if(uplink!=NULL)
     {
@@ -509,7 +555,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     if(points) award_commission(new_account, points,"TBB","", fout);
 
     /* add new node to linear structure of all nodes */
-    AccountPointer ap = (AccountPointer)malloc(sizeof(struct account_pointer));
+    AccountPointer ap = malloc(sizeof(struct account_pointer));
     if(ap==NULL)
     {
          /* you dont want memory leaks, trust me */
@@ -639,7 +685,7 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                     if(!percentages[i][0]) ghfu_warn(13,fout);
                     else
                     {
-                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
@@ -671,7 +717,7 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        new_commission->reason = malloc(sizeof(char)*(buff_length+1));
                         if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
@@ -717,7 +763,7 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                     if(!percentages[i][0]) ghfu_warn(13,fout);
                     else
                     {
-                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
@@ -749,7 +795,7 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        new_commission->reason = malloc(sizeof(char)*(buff_length+1));
                         if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
@@ -888,7 +934,7 @@ void calculate_tvc(Account account, FILE *fout)
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
-                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
@@ -919,7 +965,7 @@ void calculate_tvc(Account account, FILE *fout)
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        new_commission->reason = malloc(sizeof(char)*(buff_length+1));
                         if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
@@ -982,7 +1028,7 @@ void calculate_tvc(Account account, FILE *fout)
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
-                        new_commission = (Commission)malloc(sizeof(struct commission));
+                        new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
 
                         new_commission->reason = NULL;
@@ -1013,7 +1059,7 @@ void calculate_tvc(Account account, FILE *fout)
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
                            new_commission->reason...basically U DONT WANNA ASSIGN TO A LOCAL POINTER BCOZ ONCE D FUCTION
                            EXITS, THE POINTER WILL BE ANONYMOUS!)*/
-                        new_commission->reason = (String)malloc(sizeof(char)*(buff_length+1));
+                        new_commission->reason = malloc(sizeof(char)*(buff_length+1));
                         if(new_commission->reason==NULL) {gfree(new_commission); memerror(fout);}
                         join_strings(new_commission->reason,reason_strings);
 
@@ -1566,13 +1612,29 @@ void monthly_operations(float auto_refill_percentages[][2], FILE *fout)
     award_rank_monthly_bonuses(NULL, fout);
 }
 
-void perform_monthly_operations(float auto_refill_percentages[][2], String fout_name)
+bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name)
 {
     /* python/java/etc interface to monthly_operations */
+
+    bool status = false;
+
     FILE *fout = fopen(fout_name, "w");
-    monthly_operations(auto_refill_percentages, fout);
+    
+    if(auto_refill_percentages==NULL && MONTHLY_AUTO_REFILL_PERCENTAGES==NULL)
+    {
+        fprintf(fout, "no percentages given and the defaults are still not set!\n");
+        fclose(fout);
+        return status;
+    }
+    if(auto_refill_percentages!=NULL) /* use given %ges but dont update the defaults */
+        monthly_operations(auto_refill_percentages, fout);
+    else
+        monthly_operations(MONTHLY_AUTO_REFILL_PERCENTAGES, fout);
     
     fclose(fout);
+
+    status = true;
+    return status;
 }
 
 void ghfu_warn(unsigned int ghfu_errno, FILE *fout)
@@ -1651,12 +1713,17 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     /* dump current auto-refill percentages */
 
-    int num_of_arps=0;
-    for(; MONTHLY_AUTO_REFILL_PERCENTAGES[num_of_arps][0]; ++num_of_arps);
-    fprintf(fout, "%d\x1", num_of_arps);
-    for(int i=0; i<(num_of_arps-1); ++i) /*dont dump the last {0,0} coz we are certain its always there! */
-        fprintf(fout, "%.2f\x1%.2f\x1", 
-            MONTHLY_AUTO_REFILL_PERCENTAGES[i][0],MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
+    if(MONTHLY_AUTO_REFILL_PERCENTAGES!=NULL)
+    {
+        unsigned int num_of_arps=1;
+        for(; MONTHLY_AUTO_REFILL_PERCENTAGES[num_of_arps-1][0]; ++num_of_arps);
+        fprintf(fout, "%d\x1", num_of_arps);
+        for(int i=0; i<(num_of_arps); ++i) /*dont dump the last {0,0} coz we are certain its always there! */
+            fprintf(fout, "%.2f\x1%.2f\x1", 
+                MONTHLY_AUTO_REFILL_PERCENTAGES[i][0],MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
+    }
+    else
+        fprintf(fout, "%d\x1", 0);
 
     fclose(fout);
     
@@ -1715,6 +1782,37 @@ bool load_constants(String jermCrypt_path, String save_dir)
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID
         );
+
+    /* extract monthly-auto-refill-percentages */
+    unsigned int num_of_arps=0;
+    fscanf(fin, "%d\x1", &num_of_arps);
+    
+    if(num_of_arps)
+    {
+        if(MONTHLY_AUTO_REFILL_PERCENTAGES!=NULL)
+        {
+            bool deleting = true;
+            for(int i=0; deleting; ++i)
+            {
+                if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) deleting = false;
+                gfree(MONTHLY_AUTO_REFILL_PERCENTAGES[i]);
+            }
+            gfree(MONTHLY_AUTO_REFILL_PERCENTAGES);
+        }
+
+        MONTHLY_AUTO_REFILL_PERCENTAGES = malloc(num_of_arps*sizeof(float*));
+        if (MONTHLY_AUTO_REFILL_PERCENTAGES==NULL) memerror(stdout);
+        for(int i=0; i<num_of_arps; ++i)
+        {
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i] = malloc(sizeof(float)*2);
+            if(MONTHLY_AUTO_REFILL_PERCENTAGES[i]==NULL) memerror(stdout);
+            fscanf(fin, "%f\x1%f\x1", 
+                MONTHLY_AUTO_REFILL_PERCENTAGES[i], 
+                &(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]));
+        }
+    
+    }
+    
 
     fclose(fin);
     
@@ -2023,7 +2121,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
             gfree(p_acc_p);
         }
         
-        HEAD = (AccountPointer)malloc(sizeof(struct account_pointer));
+        HEAD = malloc(sizeof(struct account_pointer));
 
         if(HEAD==NULL) memerror(stdout);
 
@@ -2052,7 +2150,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
     ID id, uplink_id;
     while(fscanf(fin, "%ld\x1", &id)!=EOF)
     {
-        Account new_account = (Account)malloc(sizeof(struct account));
+        Account new_account = malloc(sizeof(struct account));
         
         if(new_account==NULL) memerror(stdout);
 
@@ -2132,7 +2230,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
             {
                 fscanf(fin,"%ld\x1",&child_id);
                 
-                new_child_p = (Child)malloc(sizeof(struct child));
+                new_child_p = malloc(sizeof(struct child));
                 if(new_child_p==NULL)
                     {gfree(new_account->names); gfree(new_account); memerror(stdout);}
                 
@@ -2158,7 +2256,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
         {
             while(number_of_items)
             {
-                new_commission = (Commission)malloc(sizeof(struct commission));
+                new_commission = malloc(sizeof(struct commission));
                 if(new_commission==NULL)
                 {
                     /* perform garbage collection on all malloc'd data */
@@ -2209,7 +2307,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
         {
             while(number_of_items)
             {
-                new_investment = (Investment)malloc(sizeof(struct investment));
+                new_investment = malloc(sizeof(struct investment));
                 if(new_investment==NULL)
                 {
                     /* garbage collection */
@@ -2285,7 +2383,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
             }
         }
 
-        acc_p = (AccountPointer)malloc(sizeof(struct account_pointer));
+        acc_p = malloc(sizeof(struct account_pointer));
         if(acc_p==NULL)
         {
             gfree(new_account->names); 
@@ -2332,7 +2430,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
         uplink_account = get_account_by_id(child_p->uplink_id);
         child_account = get_account_by_id(child_p->id);
         
-        acc_p = (AccountPointer)malloc(sizeof(struct account_pointer));
+        acc_p = malloc(sizeof(struct account_pointer));
         if(acc_p==NULL)
         {
             /* congs, we just robbed an uplink of their direct child. this destroys everything
@@ -2366,6 +2464,48 @@ bool load_structure(String jermCrypt_path, String save_dir)
             
     status = true;
     dlclose(libjermCrypt);
+
+    return status;
+}
+
+bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], String jermCrypt_path, String save_dir)
+{
+    bool status = false;
+    
+    if(auto_refill_percentages==NULL) return status;
+
+    unsigned int num_of_arps=0;
+    for(; auto_refill_percentages[num_of_arps][0]; ++num_of_arps);
+    
+    num_of_arps ? ++num_of_arps : num_of_arps;
+    
+    if(num_of_arps)
+    {
+        if(MONTHLY_AUTO_REFILL_PERCENTAGES!=NULL)
+        {
+            bool deleting = true;
+            for(int i=0; deleting; ++i)
+            {
+                if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) deleting = false;
+                gfree(MONTHLY_AUTO_REFILL_PERCENTAGES[i]);
+            }
+            gfree(MONTHLY_AUTO_REFILL_PERCENTAGES);
+        }
+
+        MONTHLY_AUTO_REFILL_PERCENTAGES = malloc(num_of_arps*sizeof(float*));
+        if (MONTHLY_AUTO_REFILL_PERCENTAGES==NULL) memerror(stdout);
+        for(int i=0; i<num_of_arps; ++i)
+        {
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i] = malloc(sizeof(float)*2);
+            if(MONTHLY_AUTO_REFILL_PERCENTAGES[i]==NULL) memerror(stdout);
+            
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = auto_refill_percentages[i][0]; 
+            MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = auto_refill_percentages[i][1];
+        }
+        
+        status = dump_constants(jermCrypt_path, save_dir);
+    
+    }
 
     return status;
 }

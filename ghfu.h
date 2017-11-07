@@ -152,7 +152,7 @@ Account get_account_by_id(const ID id);
 ID account_id(Account account);
 
 void monthly_operations(float auto_refill_percentages[][2], FILE *fout);
-void perform_monthly_operations(float auto_refill_percentages[][2], String fout_name);
+bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name);
 
 void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
 void gfree(void *p);
@@ -170,3 +170,5 @@ bool save_structure(String jermCrypt_path, String save_dir);
     */
 bool load_constants(String jermCrypt_path, String save_dir);
 bool load_structure(String jermCrypt_path, String save_dir);
+
+bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], String jermCrypt_path, String save_dir);
