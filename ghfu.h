@@ -10,9 +10,20 @@
                       calculations would get considerably slow if recursion was used instead of 
                       iteration
 
-    NB: this program is thread-safe so no pressure on whoever is calling libjermGHFU.so from the server program
+    NB: this program is thread-safe so no pressure(?) on whoever is calling libjermGHFU.so from the server 
+        program.
         the url <http://www.thegeekstuff.com/2012/05/c-mutex-examples/?refcom> is a nice place to see the logic
         used here(mutex locks)
+
+
+        DONT FUCK WITH THE pthread_mutex_[un]lock(&glock) CALLS. THEY ARE THE BASIS OF ALL POSSIBLE BUGS
+        INTRODUCED BY MULTI-THREADING/PROCESSING. TAKE YOUR TIME TO FULLY UNDERSTAND WHY EACH CALL IS
+        PRECICELY WHERE IT IS AND NO A LINE AFTER OR BEFORE! IF THESE CALLS ARE MESSED WITH, YOU GOT 
+        YOURSELF A DEAD-LOCKED PROGRAM (ONE THREAD/FUNCTION LOCKS A mutex AND DOESN'T UNLOCK IT (maybe 
+        it exited ubruptly, or called another function that needs a variable locked by the function calling 
+        the new function eg invest_money calls award_commission at one point an in this case, care must be
+        takn to ensure that invest_money only calls award_commission after ensuring any variable needed by
+        award_commission is unlocked...simpler said than done :):):) )) 
 */
 
 /* library inclusion */
