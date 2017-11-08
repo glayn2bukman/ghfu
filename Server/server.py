@@ -35,7 +35,7 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, time
+import os, sys, json, time, threading
 
 from ctypes import *
 
@@ -159,6 +159,10 @@ def register():
         account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
         if account_id: 
             reply["id"]=account_id
+
+            threading.Thread(target=libghfu.save_structure, args=(
+                os.path.join(path,"lib"), os.path.join(path,"files","saves")
+                )).start()
         else: 
             reply["log"] = info(logfile)
     
@@ -269,6 +273,10 @@ def buy_package():
     else: 
         reply["status"]=True
 
+        threading.Thread(target=libghfu.save_structure, args=(
+            os.path.join(path,"lib"), os.path.join(path,"files","saves")
+            )).start()
+
 
     rm(logfile)
 
@@ -329,6 +337,11 @@ def set_data_constants():
 
     for key in reply:
         if reply[key]:
+
+            threading.Thread(target=libghfu.dump_constants, args=(
+                os.path.join(path,"lib"), os.path.join(path,"files","saves")
+                )).start()
+
             break
 
     return reply_to_remote(jencode(reply))
@@ -384,6 +397,10 @@ def invest():
     
     if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
         reply["status"]=True
+
+        threading.Thread(target=libghfu.save_structure, args=(
+            os.path.join(path,"lib"), os.path.join(path,"files","saves")
+            )).start()
     else:
         reply["log"] = info(logfile)
 
@@ -460,8 +477,5 @@ if __name__=="__main__":
         c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
         c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value+180+500,
         file_path("pseudo-root"))
-
-    #update_structure_thread = threading.Thread(target=update_structure, args=())
-    #update_structure_thread.start()
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)

@@ -27,24 +27,20 @@ void init(String jermCrypt_path, String save_dir)
         fprintf(stdout, "init already called...skipping"); 
         return;
     }
-
-
-    unsigned int buff_length;
-        
-    String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
-    
-    length_of_all_strings(data_file_paths, &buff_length);
-    char data_file_path[buff_length+1];
-    join_strings(data_file_path, data_file_paths);
-
-    FILE *fin = fopen(data_file_path,"rb");
-
-    if(fin)
+    if(pthread_mutex_init(&glock, NULL))
+     /* init utex to not only work btn threads but processes*/
     {
-        fclose(fin);
-        load_constants(jermCrypt_path, save_dir);
+        fprintf(stdout, "FAILED TO CREATE MUTEX! EXITTING LIBRARY"); 
+        exit(2);
     }
-    else
+
+    GLOCK_INITIALISED = true;
+
+    bool data_loaded;
+
+    data_loaded = load_constants(jermCrypt_path, save_dir);
+    
+    if(!data_loaded)
     {
         /* these data variables shall be reset when reading data from file */
         SYSTEM_FLOAT=0; CUMULATIVE_COMMISSIONS=0; COMMISSIONS=0;
@@ -110,30 +106,8 @@ void init(String jermCrypt_path, String save_dir)
 
     TAIL = HEAD;
 
-    String structure_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
-    
-    length_of_all_strings(structure_file_paths, &buff_length);
-    char structure_file_path[buff_length+1];
-    join_strings(structure_file_path, structure_file_paths);
+    load_structure(jermCrypt_path, save_dir);
 
-    fin = fopen(structure_file_path,"rb");
-
-    if(fin) 
-    {
-        fclose(fin); /* you dont want load_structure to attempt opening this file when its already
-                        opened in init
-                     */
-        load_structure(jermCrypt_path, save_dir);
-    }
-
-    if(pthread_mutex_init(&glock, NULL))
-     /* init utex to not only work btn threads but processes*/
-    {
-        fprintf(stdout, "FAILED TO CREATE MUTEX! EXITTING LIBRARY"); 
-        exit(2);
-    }
-
-    GLOCK_INITIALISED = true;
 
 }
 

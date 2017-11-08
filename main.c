@@ -4,7 +4,7 @@ int main()
 {
 	init("lib","test");
 
-/*
+/* 
     if(HEAD->next!=NULL) // found daved structure, just load that and leave
     {
         structure_details(NULL);
@@ -17,6 +17,7 @@ int main()
     char c;
     fscanf(stdin, "%c",&c);
 */
+
     /* create a simple brocker */
     Account brocker1 = register_member(NULL, "Brocker 1",50,stdout);
 
