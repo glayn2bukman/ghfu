@@ -1,7 +1,16 @@
 """
-    the server program, in debugging mode, Ctrl-C/Z might not stop the program completely (it has multiple 
-    main threads running). in that case, you'll get a "port already taken" error when you attempt to re-run the 
-    server. if that happens, run;
+    ==== ABOUT ====    
+    this script acts as the python web-API between libjermGHFU.so and martin's web front-end for GHFU.
+    libjermGHFU.so is thread-safe so no worries(?) about multiple threads(incoming requests) updating the same
+    data at the same time
+    
+    ==== MARTIN'S WARNING ====
+    no account sould be logged in more than once at any one time. this will greatly reduce on the thread-safe
+    labor libjermGHFU.so has
+    
+    ==== RUNNING & DEBUGGING ====     
+    the server program, in debugging mode, Ctrl-C/Z might not stop the program completely. in that case, 
+    you'll get a "port already taken" error when you attempt to re-run the server. if that happens, run;
         $ netstat -tulpn | grep $(PORT=54321; echo $PORT) # set PORT to whatever port is being used
     and when you get the PID (in the last column ie PID/python), kill the process with
         $ kill -9 PID
@@ -26,7 +35,7 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, time, threading
+import os, sys, json, time
 
 from ctypes import *
 
@@ -59,21 +68,6 @@ app = Flask(__name__)
 known_clients = "127.0.0.1"
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
-
-DUMP_DATA = 0
-update_sleep_time = 0.1
-
-# the all-important functions that ensures the live structure is updated whenever necessary
-def update_structure():
-    global DUMP_DATA
-    while 1: # run as long as the server is active
-        if DUMP_DATA:
-            if not libghfu.save_structure(os.path.join(path,"lib"), os.path.join(path,"files","saves")):
-                print "STRUCTURE NOT SAVED! YOU WANNA LOOK INTO THIS"
-            if not libghfu.dump_constants(os.path.join(path,"lib"), os.path.join(path,"files","saves")):
-                print "CONSTANTS NOT SAVED! YOU WANNA LOOK INTO THIS"
-            DUMP_DATA = 0
-        time.sleep(update_sleep_time)
 
 # remove used uncessesary file
 def rm(f):
@@ -118,7 +112,6 @@ def test():
 def register():
     """ if returned json has <id> set to 0, check for the log from key <log>"""
 
-    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -166,7 +159,6 @@ def register():
         account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
         if account_id: 
             reply["id"]=account_id
-            DUMP_DATA = 1
         else: 
             reply["log"] = info(logfile)
     
@@ -233,8 +225,6 @@ def details():
 def buy_package():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
 
-    global DUMP_DATA
-
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -278,7 +268,6 @@ def buy_package():
         with open(logfile, "r") as f: reply["log"] = f.read()
     else: 
         reply["status"]=True
-        DUMP_DATA = 1
 
 
     rm(logfile)
@@ -314,8 +303,6 @@ def set_data_constants():
         OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT
     """
 
-    global DUMP_DATA
-
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -342,7 +329,6 @@ def set_data_constants():
 
     for key in reply:
         if reply[key]:
-            DUMP_DATA = 1
             break
 
     return reply_to_remote(jencode(reply))
@@ -351,8 +337,6 @@ def set_data_constants():
 @app.route("/invest", methods=["POST"])
 def invest():
     " if returned json <status> key is true, all went well, otherwise, check <log>"
-
-    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
@@ -400,7 +384,6 @@ def invest():
     
     if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
         reply["status"]=True
-        DUMP_DATA = 1
     else:
         reply["log"] = info(logfile)
 
@@ -414,8 +397,6 @@ def update_auto_refills():
      this task should be done monthly a day or two before payment day. infact martin's system should reming the 
      necessary people about this atleast 2 days prior to payment!
     """
-
-    global DUMP_DATA
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401

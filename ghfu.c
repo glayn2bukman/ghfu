@@ -1,5 +1,6 @@
 /* export this file as a library with
     $ gcc -shared -fPIC -o libjermGHFU.so ghfu.c
+
 */
 
 #include "ghfu.h"
@@ -18,7 +19,15 @@ void memerror(FILE *fout)
 
 void init(String jermCrypt_path, String save_dir)
 {
-    /* init should ONLY BE CALLED ONCE, at stystem start */
+    /* call at stystem start */
+
+    if(GLOCK_INITIALISED)
+        /* prevent a re-calling of init */
+    {
+        fprintf(stdout, "init already called...skipping"); 
+        return;
+    }
+
 
     unsigned int buff_length;
         
@@ -117,16 +126,35 @@ void init(String jermCrypt_path, String save_dir)
         load_structure(jermCrypt_path, save_dir);
     }
 
+    if(pthread_mutex_init(&glock, NULL))
+     /* init utex to not only work btn threads but processes*/
+    {
+        fprintf(stdout, "FAILED TO CREATE MUTEX! EXITTING LIBRARY"); 
+        exit(2);
+    }
+
+    GLOCK_INITIALISED = true;
+
 }
 
-void increment_pv(Account account, const Amount points, FILE *fout)
+bool increment_pv(Account account, const Amount points, FILE *fout)
 {
     /* this function ensures that all PV increments anss rank updates in a certain line of sucession
        occur are updated all at one when a PV changes. this in turn means that the web-API that calls
        for information never delays because the data is not calculated/determined at calling time but
        rather is updated and made readily available any time the web-API needs it 
     */
-    if(account==NULL){ghfu_warn(7,fout); return;}
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO increment PV. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
+    if(account==NULL){ghfu_warn(7,fout); return false;}
+
+    pthread_mutex_lock(&glock);
+    
     account->pv += points;
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
@@ -137,11 +165,17 @@ void increment_pv(Account account, const Amount points, FILE *fout)
     */
 
     Account acc = account;
+    
+    pthread_mutex_unlock(&glock);
+
+
     unsigned int highest_rank, i;
     
     while(acc!=NULL)
     {
         raise_rank(acc, fout);
+
+        pthread_mutex_lock(&glock);
 
         highest_rank = acc->highest_leg_ranks[0];
         for(i=1;i<3;++i)
@@ -186,14 +220,24 @@ void increment_pv(Account account, const Amount points, FILE *fout)
             }
         }
         acc = acc->uplink;
+
+        pthread_mutex_unlock(&glock);
+
     }
     
+    return true;
 }
 
-void award_commission(Account account, Amount points, String commission_type, String reason, FILE *fout)
+bool award_commission(Account account, Amount points, String commission_type, String reason, FILE *fout)
 {
-    if(!points){ghfu_warn(8,fout); return;}
-    if(account==NULL) {fprintf(fout,"could not award commissions for NULL account!\n"); return;}
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO award commission. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
+    if(!points){ghfu_warn(8,fout); return false;}
+    if(account==NULL) {fprintf(fout,"could not award commissions for NULL account!\n"); return false;}
     
     Commission new_commission = malloc(sizeof(struct commission));
     if(new_commission==NULL) memerror(fout);
@@ -214,10 +258,12 @@ void award_commission(Account account, Amount points, String commission_type, St
     {
         /* fast start bonus (whenver a new member joins)*/
         int i=0;
+        pthread_mutex_lock(&glock);
         for(; FSB[i][1]; ++i)
         {   
             if(account->pv < FSB[i+1][0]) break;
         }
+        pthread_mutex_unlock(&glock);
 
         i = FSB[i][1] ? i : --i; /* could have brocken up from the {0,0} terminating array*/
 
@@ -228,10 +274,12 @@ void award_commission(Account account, Amount points, String commission_type, St
     {
         /* independent brocker commission (whenever a package is bought) */
         int i=0;
+        pthread_mutex_lock(&glock);
         for(; IBC[i][1]; ++i)
         {
             if(account->pv < IBC[i+1][0]) break;
         }
+        pthread_mutex_unlock(&glock);
 
         i = IBC[i][1] ? i : --i; /* could have brocken up from the {0,0} terminating array*/
         
@@ -249,7 +297,10 @@ void award_commission(Account account, Amount points, String commission_type, St
         
         gfree(new_commission); /* you dont want memory leaks, trust me */
         
-        if(account->uplink==NULL) return;
+        if(account->uplink==NULL) return false;
+        
+        pthread_mutex_lock(&glock);
+        
         int generation = 1;
         Account uplink = account->uplink->uplink;
         
@@ -316,6 +367,9 @@ void award_commission(Account account, Amount points, String commission_type, St
         }
         
         p_comm = 0; /* without this, we have a memory leak due to the if(p_comm) below */
+
+        pthread_mutex_unlock(&glock);
+
     }
 
     if(p_comm)
@@ -331,6 +385,8 @@ void award_commission(Account account, Amount points, String commission_type, St
         if(new_commission->reason==NULL) memerror(fout); /* could do much better to rollback all changes 
                                                             but i dint coz memerror exits the program!*/
         join_strings(new_commission->reason,reason_strings);
+
+        pthread_mutex_lock(&glock);
 
         new_commission->amount = p_comm;
         account->available_balance += p_comm;
@@ -352,7 +408,12 @@ void award_commission(Account account, Amount points, String commission_type, St
 
         CUMULATIVE_COMMISSIONS += p_comm;
         COMMISSIONS += p_comm;
+        
+        pthread_mutex_unlock(&glock);
+
     }
+
+    return true;
 }
 
 bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name)
@@ -371,13 +432,50 @@ bool invest(ID account_id, const Amount amount, const String package, const ID p
 
 bool invest_money(Account account, Amount amount, String package, ID package_id, bool update_system_float, FILE *fout)
 {
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO invest money. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     if(account==NULL) {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
 
     amount -= OPERATIONS_FEE;
-    if(amount<0){ printf("failed to invest for <%s>...", account->names); ghfu_warn(4,fout); return false; }
-    if(!amount){ printf("failed to invest for <%s>...", account->names); ghfu_warn(5,fout); return false; }
-    if(amount<MINIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(6,fout); return false; }
-    if(amount>MAXIMUM_INVESTMENT){ printf("failed to invest for <%s>...", account->names); ghfu_warn(9,fout); return false; }
+    
+    pthread_mutex_lock(&glock);
+    
+    if(amount<0)
+    { 
+        printf("failed to invest for <%s>...", account->names); ghfu_warn(4,fout); 
+
+        pthread_mutex_unlock(&glock);
+
+        return false; 
+    }
+    if(!amount)
+    { 
+        printf("failed to invest for <%s>...", account->names); ghfu_warn(5,fout); 
+
+        pthread_mutex_unlock(&glock);
+
+        return false; 
+    }
+    if(amount<MINIMUM_INVESTMENT)
+    { 
+        printf("failed to invest for <%s>...", account->names); ghfu_warn(6,fout); 
+
+        pthread_mutex_unlock(&glock);
+
+        return false; 
+    }
+    if(amount>MAXIMUM_INVESTMENT)
+    { 
+        printf("failed to invest for <%s>...", account->names); ghfu_warn(9,fout); 
+
+        pthread_mutex_unlock(&glock);
+
+        return false; 
+    }
 
     Investment new_investment = malloc(sizeof(struct investment));
     
@@ -435,6 +533,8 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
         SYSTEM_FLOAT += amount;
     }
 
+    pthread_mutex_unlock(&glock);
+
     increment_pv(account, points, fout);
 
     return true; /* leave this out and you have memory leaks when invest money is called from regiter_member*/
@@ -461,6 +561,13 @@ ID register_new_member(ID uplink_id, String names, Amount amount, String fout_na
 Account register_member(Account uplink, String names, Amount amount, FILE *fout)
 {
     /* if this function returns NULL, DONT USE RESULT (it indicates an error, more like malloc)*/
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO register member. glock NOT INITIALISED. did you call init?"); 
+        return NULL;
+    }
+
     if(amount<(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(1,fout); return NULL; }
     if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
@@ -533,10 +640,14 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         ap->account = new_account;
         ap->next = NULL;
 
+        pthread_mutex_lock(&glock);
+        
         if(uplink->children==NULL) { ap->prev = NULL; uplink->children = ap;}
         else { ap->prev = uplink->last_child; uplink->last_child->next = ap;}
 
         uplink->last_child = ap;
+        
+        pthread_mutex_unlock(&glock);
         
         if(points)
         {
@@ -589,6 +700,8 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     ap->account = new_account;
     ap->next = NULL;
 
+    pthread_mutex_lock(&glock);
+
     if(HEAD->next==NULL) { ap->prev = HEAD; HEAD->next = ap; }
     else { ap->prev = TAIL; TAIL->next = ap; }
     
@@ -599,16 +712,26 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
 
     ++CURRENT_ID; ++ACTIVE_ACCOUNTS;
 
+    pthread_mutex_unlock(&glock);
+
+
     return new_account;
 }
 
-void buy_property(Account IB_account, Amount amount, bool member, String buyer_names, FILE *fout)
+bool buy_property(Account IB_account, Amount amount, bool member, String buyer_names, FILE *fout)
 {
     /* if member(IV or registered investor), get IBC and those points otherwise just add this amount to 
        the system total float */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO buy property. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     Amount points = amount*POINT_FACTOR;
         
-    if(IB_account==NULL){ghfu_warn(3,fout); return;}
+    if(IB_account==NULL){ghfu_warn(3,fout); return false;}
 
     /* create reason for the commission */
     String reason_strings[] = {"IBC from ",buyer_names,"\0"};
@@ -628,21 +751,30 @@ void buy_property(Account IB_account, Amount amount, bool member, String buyer_n
         award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
     }
 
+    pthread_mutex_lock(&glock);
+    
     SYSTEM_FLOAT += amount;
+    
+    pthread_mutex_unlock(&glock);
+
+    return true;
 }
 
-void purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name)
+bool purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name)
 {
     /* python/java/etc interface to buy_property*/
     Account IB_account = get_account_by_id(IB_account_id);
 
     FILE *fout = fopen(fout_name, "w");
-    buy_property(IB_account,amount,member,buyer_names,fout);
+    
+    bool status = buy_property(IB_account,amount,member,buyer_names,fout);
     
     fclose(fout);
+
+    return status;
 }
 
-void auto_refill(Account account, float percentages[][2], FILE *fout)
+bool auto_refill(Account account, float percentages[][2], FILE *fout)
 {
     /* if account==NULL, calculate autp-refills for all investments in the system otherwise, 
        calculate auto-refill for only that account's investments 
@@ -653,10 +785,16 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
     /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
        make the function recursive as this becomes CPU expensive in the long run */
 
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO do auto-refill. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     time_t t; time(&t);
     struct tm *today = localtime(&t);
 
-    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12,fout); return;}
+    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12,fout); return false;}
 
     Commission new_commission;
     Investment inv;
@@ -669,6 +807,7 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
     {
         if(account->investments!=NULL)
         {
+           pthread_mutex_lock(&glock); 
            inv = account->investments;
            while(inv!=NULL)
            {
@@ -732,9 +871,12 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                    
                }
                inv = inv->next;
-           } 
+           }
+           
+           pthread_mutex_unlock(&glock); 
+ 
         }
-        return;
+        return true;
     }
 
     AccountPointer acc_p = HEAD;
@@ -747,6 +889,8 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
 
         if(acc->investments!=NULL)
         {
+
+           pthread_mutex_lock(&glock); 
            inv = acc->investments;
            while(inv!=NULL)
            {
@@ -810,12 +954,17 @@ void auto_refill(Account account, float percentages[][2], FILE *fout)
                    
                }
                inv = inv->next;
-           } 
+           }
+           
+           pthread_mutex_unlock(&glock); 
+            
         }
 
 
         acc_p = acc_p->next;
     }
+
+    return true;
 }
 
 bool raise_rank(Account account, FILE *fout)
@@ -825,12 +974,21 @@ bool raise_rank(Account account, FILE *fout)
        from rank r to (r+4), they get the award for (r+4) not all the awards from
        (r+1) through (r+4)!
     */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO raise-rank. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     bool rank_raised = false;
     if(account==NULL) return rank_raised;
     if(account->rank==11) return rank_raised; /* already at maximum rank */
 
     unsigned int rank = account->rank;
 
+    pthread_mutex_lock(&glock);
+    
     while((RANK_DETAILS[rank][3]!=1) && ++rank)
     {
         if(!(
@@ -857,7 +1015,7 @@ bool raise_rank(Account account, FILE *fout)
 
     rank = rank==12 ? --rank : rank;
 
-    if(rank==account->rank) return rank_raised;
+    if(rank==account->rank) {pthread_mutex_unlock(&glock); return rank_raised;}
 
     rank_raised = true;
 
@@ -871,20 +1029,28 @@ bool raise_rank(Account account, FILE *fout)
     
     account->rank = rank;
     
+    pthread_mutex_unlock(&glock);
+    
     return rank_raised;
 }
 
-void calculate_tvc(Account account, FILE *fout)
+bool calculate_tvc(Account account, FILE *fout)
 {
     /* this function should be called only once a month on the agreed day */
 
     /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
        make the function recursive as this becomes CPU expensive in the long run */
 
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO calculate TVC. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     time_t t; time(&t);
     struct tm *today = localtime(&t);
 
-    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15,fout); return;}
+    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15,fout); return false;}
 
     Amount lower_leg_volume, actual_lower_leg_volume, returns;
     unsigned int i, j, buff_length; /* i is used for getting the lower_leg_volume, while j is used to
@@ -897,6 +1063,8 @@ void calculate_tvc(Account account, FILE *fout)
 
     if(account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         if(
             /* since logic operators are processed left to right, this code won't 
                break when account->children->next==NULL!
@@ -980,7 +1148,9 @@ void calculate_tvc(Account account, FILE *fout)
         
         /* else{fprintf(fout,"not TVC for <%s>...",account->names); ghfu_warn(14,fout);} */
         
-        return;
+        pthread_mutex_unlock(&glock);
+
+        return true;
     }
 
     AccountPointer acc_p = HEAD;
@@ -989,6 +1159,8 @@ void calculate_tvc(Account account, FILE *fout)
 
     while(acc_p!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         acc = acc_p->account;
 
         if(
@@ -1073,16 +1245,28 @@ void calculate_tvc(Account account, FILE *fout)
         }
 
         acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
     }
+
+    return true;
 }
 
-void award_rank_monthly_bonuses(Account account, FILE *fout)
+bool award_rank_monthly_bonuses(Account account, FILE *fout)
 {
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO award rank-monthly bonuses. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     Amount lower_leg_volume, actual_lower_leg_volume;
     unsigned int i;
 
     if(account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         if(account->rank>=6) /* rank-bonuses for rank>=Senior Director*/
         {
             lower_leg_volume = account->leg_volumes[0];
@@ -1105,7 +1289,9 @@ void award_rank_monthly_bonuses(Account account, FILE *fout)
             }
         }
 
-        return;
+        pthread_mutex_unlock(&glock);
+
+        return true;
     }
     AccountPointer acc_p = HEAD;
     Account acc;
@@ -1113,6 +1299,8 @@ void award_rank_monthly_bonuses(Account account, FILE *fout)
 
     while(acc_p!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         acc = acc_p->account;
 
         if(acc->rank>=6) /* rank-bonuses for rank>=Senior Director*/
@@ -1138,53 +1326,90 @@ void award_rank_monthly_bonuses(Account account, FILE *fout)
         }
 
         acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
+
     }
+
+    return true;
 }
 
 void show_commissions(Account account)
 {
     /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
        make the function recursive as this becomes CPU expensive in the long run */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO show commissions. glock NOT INITIALISED. did you call init?"); 
+        return;
+    }
+
     Commission c;
     
     if (account!=NULL)
     {        
         printf("\n  %s's COMMISSIONS & BONUSES\n",account->names);
+
+        pthread_mutex_lock(&glock);
+        
         c = account->commissions;
         if(c==NULL) printf("    None\n");
 
         int i = 1;
         while(c!=NULL){printf("    %d) %s\n",i, c->reason); c=c->next; ++i;}        
         
+        pthread_mutex_unlock(&glock);
+        
         return;
     }
+
+    pthread_mutex_lock(&glock);
 
     AccountPointer acc_p = HEAD;
     Account acc;
     acc_p = acc_p==NULL ? acc_p : acc_p->next;
 
+    pthread_mutex_unlock(&glock);
+
+
     while(acc_p!=NULL)
     {
+        
         acc = acc_p->account;
 
         printf("\n  %s's COMMISSIONS & BONUSES\n",acc->names);
+        
+        pthread_mutex_lock(&glock);
+        
         c = acc->commissions;
         if(c==NULL) printf("    None\n");
 
         int i = 1;
         while(c!=NULL){printf("    %d) %s\n",i, c->reason); c=c->next; ++i;}
 
+        pthread_mutex_unlock(&glock);
+
         acc_p = acc_p->next;
     }
 }
 
-void dump_commissions(const Account account, FILE *fout)
+bool dump_commissions(const Account account, FILE *fout)
 {
     /* dump commissions to json file */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump commissions. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     Commission c;
     
     if (account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         c = account->commissions;
         fprintf(fout, ",\"commissions\": [");
 
@@ -1199,8 +1424,12 @@ void dump_commissions(const Account account, FILE *fout)
         }
         
         fprintf(fout, "]");
+
+        pthread_mutex_unlock(&glock);
     
     }
+
+    return true;
 }
 
 void show_leg_volumes(Account account)
@@ -1208,36 +1437,69 @@ void show_leg_volumes(Account account)
     /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
        make the function recursive as this becomes CPU expensive in the long run */
 
-    if(account!=NULL)
+    if(!GLOCK_INITIALISED)
     {
-        printf("%s leg volumes: [%.0f, %.0f, %.0f]\n",account->names, 
-            account->leg_volumes[0], account->leg_volumes[1], account->leg_volumes[2]);
+        fprintf(stdout, "FAILED TO show leg volumes. glock NOT INITIALISED. did you call init?"); 
         return;
     }
+
+    if(account!=NULL)
+    {
+        pthread_mutex_lock(&glock);
+
+        printf("%s leg volumes: [%.0f, %.0f, %.0f]\n",account->names, 
+            account->leg_volumes[0], account->leg_volumes[1], account->leg_volumes[2]);
+
+        pthread_mutex_unlock(&glock);
+
+        return;
+    }
+
+    pthread_mutex_lock(&glock);
 
     AccountPointer acc_p = HEAD;
     Account acc;
     acc_p = acc_p==NULL ? acc_p : acc_p->next;
 
+    pthread_mutex_unlock(&glock);
+
+
     while(acc_p!=NULL)
     {
         acc = acc_p->account;
+
+        pthread_mutex_lock(&glock);
 
         printf("%s leg volumes: [%.0f, %.0f, %.0f]\n",acc->names, 
             acc->leg_volumes[0], acc->leg_volumes[1], acc->leg_volumes[2]);
 
         acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
     }
 }
 
-void dump_leg_volumes(const Account account, FILE *fout)
+bool dump_leg_volumes(const Account account, FILE *fout)
 {
     /* dump leg volumes to json file */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump-leg-volumes. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     if(account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+        
         fprintf(fout, ",\"leg_volumes\":[%.2f,%.2f,%.2f]",
             account->leg_volumes[0], account->leg_volumes[1], account->leg_volumes[2]);
+        
+        pthread_mutex_unlock(&glock);
     }
+    
+    return true;
 }
 
 void show_investments(const Account account)
@@ -1245,11 +1507,19 @@ void show_investments(const Account account)
     /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
        make the function recursive as this becomes CPU expensive in the long run */
 
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO show investments. glock NOT INITIALISED. did you call init?"); 
+        return;
+    }
+
     Investment inv;
     struct tm *lt;
     if(account!=NULL)
     {
         printf("\n  %s's INVESTMENTS\n",account->names);
+
+        pthread_mutex_lock(&glock);
 
         inv = account->investments;
 
@@ -1268,6 +1538,9 @@ void show_investments(const Account account)
             
             if(inv!=NULL) printf("    --------\n");
         }
+
+        pthread_mutex_unlock(&glock);
+
         return;
     }
     
@@ -1280,6 +1553,8 @@ void show_investments(const Account account)
         acc = acc_p->account;
 
         printf("\n  %s's INVESTMENTS\n",acc->names);
+
+        pthread_mutex_lock(&glock);
 
         inv = account->investments;
 
@@ -1300,16 +1575,27 @@ void show_investments(const Account account)
         }
 
         acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
     }
 }
 
-void dump_investments(const Account account, FILE *fout)
+bool dump_investments(const Account account, FILE *fout)
 {
     /* dump investments to json file */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump investments. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     Investment inv;
     struct tm *lt;
     if(account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+        
         inv = account->investments;
 
         fprintf(fout, ",\"investments\":[");
@@ -1329,18 +1615,30 @@ void dump_investments(const Account account, FILE *fout)
         }
 
         fprintf(fout, "]");
+
+        pthread_mutex_unlock(&glock);
+
     }
 
+    return true;
 }
 
 void show_direct_children(const Account account)
 {
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO show direct children. glock NOT INITIALISED. did you call init?"); 
+        return;
+    }
+
     AccountPointer acc_p, acc_p_child;
     Account acc, acc_child;
 
     if(account!=NULL)
     {
         printf("\n  %s's DIRECT DESCENDANTS\n",account->names);
+
+        pthread_mutex_lock(&glock);
 
         acc_p = account->children;
         
@@ -1357,6 +1655,8 @@ void show_direct_children(const Account account)
             ++i;
         }
 
+        pthread_mutex_unlock(&glock);
+
         return;
     }
     
@@ -1365,6 +1665,8 @@ void show_direct_children(const Account account)
 
     while(acc_p!=NULL)
     {
+        pthread_mutex_lock(&glock);
+
         acc = acc_p->account;
         printf("\n  %s's DIRECT DESCENDANTS\n",acc->names);
 
@@ -1384,17 +1686,29 @@ void show_direct_children(const Account account)
         }
 
         acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
+
     }
 }
 
-void dump_direct_children(const Account account, FILE *fout)
+bool dump_direct_children(const Account account, FILE *fout)
 {
     /* dump account direct children to json file */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump direct children. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     AccountPointer acc_p;
     Account acc;
 
     if(account!=NULL)
     {
+        pthread_mutex_lock(&glock);
+        
         acc_p = account->children;
         
         fprintf(fout, ",\"direct_children\":[");
@@ -1412,7 +1726,12 @@ void dump_direct_children(const Account account, FILE *fout)
         }
 
         fprintf(fout, "]");
+
+        pthread_mutex_unlock(&glock);
+
     }
+
+    return true;
 }
 
 void structure_details(const Account account)
@@ -1421,8 +1740,18 @@ void structure_details(const Account account)
        make the function recursive as this becomes CPU expensive in the long run */
 
     /* atempt to provide all details about all members in the system */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO show structure details. glock NOT INITIALISED. did you call init?"); 
+        return;
+    }
+
     if(account!=NULL)
     {
+
+        pthread_mutex_lock(&glock);
+
         printf("\n%s\n",account->names);
         printf("  ID: %ld\n",account->id);
         printf("  Uplink: %s\n", account->uplink==NULL ? "ROOT" : account->uplink->names);
@@ -1432,6 +1761,8 @@ void structure_details(const Account account)
         printf("  Total Redeemed = $%.2lf\n",account->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             account->leg_volumes[0],account->leg_volumes[1],account->leg_volumes[2]);
+
+        pthread_mutex_unlock(&glock);
         
         show_investments(account);
         show_commissions(account);
@@ -1474,14 +1805,21 @@ bool dump_structure_details(ID account_id, String fname)
        fname is a full path to the output json file
     */
 
+    if(!GLOCK_INITIALISED)
+        return false;
+
     Account account = get_account_by_id(account_id);
 
-    if(account==NULL) return false;
+    bool status = false;
+
+    if(account==NULL) return status;
 
     FILE *fout = fopen(fname, "w");
-    if(!fout) return false;
+    if(!fout) return status;
 
     fprintf(fout, "{");
+
+    pthread_mutex_lock(&glock);
 
     /* personal info */
     fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
@@ -1492,11 +1830,14 @@ bool dump_structure_details(ID account_id, String fname)
         RANKS[account->rank], RANKS[account->highest_leg_ranks[0]], RANKS[account->highest_leg_ranks[1]],
         RANKS[account->highest_leg_ranks[2]]);
 
+    pthread_mutex_unlock(&glock);
+
     /* the other info */
-    dump_commissions(account, fout);
-    dump_leg_volumes(account,fout);
-    dump_investments(account, fout);
-    dump_direct_children(account, fout);
+    status = true;
+    dump_commissions(account, fout) ? 1: (status=false);
+    dump_leg_volumes(account,fout) ? 1: (status=false);
+    dump_investments(account, fout) ? 1: (status=false);
+    dump_direct_children(account, fout) ? 1: (status=false);
 
     fprintf(fout, "}");
 
@@ -1506,7 +1847,7 @@ bool dump_structure_details(ID account_id, String fname)
     /* now encrypt generated db_file(is it necessary? i doubt bcoz python/any other adaptor will delete
        the json file as soon as it reads from it) */
 
-    return true;
+    return status;
 }
 
 bool redeem_points(Account account, Amount amount, FILE *fout)
@@ -1515,11 +1856,22 @@ bool redeem_points(Account account, Amount amount, FILE *fout)
        network for example or when the mobile money API is down), please REVERSE this operation or the 
        member will actually lose their returns permanently! 
     */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO redeem points. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     if(account==NULL){ghfu_warn(11,fout); return false;}
     if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
 
+    pthread_mutex_lock(&glock);
+    
     account->available_balance -= amount;
     account->total_redeems += amount;
+
+    pthread_mutex_unlock(&glock);
 
     return true;
 }
@@ -1567,8 +1919,30 @@ Account get_account_by_id(const ID id)
         3) HEAD->next==NULL (no member in system)
         4) the requested account was deleted and is nolonger in the system
     
+        the function has O(N/2) complexity because we have a tail(TAIL). since we are searching for accounts,
+        this must suffice(100 million accounts will appear to be 50 million accounts when searching for target)
+        but if there is a need to make this even faster, we can introduce the concept of <middle> such that
+        there are three main account access pointers; HEAD,MIDDLE,TAIL. this gives us a new O(N/4) complexity.
+        implementation logic?
+            1) in the beginning, all (H,M&T) are NULL
+            2) when first account is created, all (H,M&T) point to the first account
+            3) as new accounts are added, H is stationary, T points to the new added account and M changes as;
+                - if new ID is even, dont change M
+                - otherwise, M = M->next
+                
+                this ensures that M is so easy to update whenever a new account is created
+    
     */
-    if((id>CURRENT_ID) || (HEAD==NULL) || (HEAD->next==NULL)) return NULL;
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO get_account_by_id. glock NOT INITIALISED. did you call init?"); 
+        return NULL;
+    }
+
+    pthread_mutex_lock(&glock);
+    if((id>CURRENT_ID) || (HEAD==NULL) || (HEAD->next==NULL)) 
+        {pthread_mutex_unlock(&glock); return NULL;}
 
     /* search from HEAD or from TAIL depending on if the id is closer to the last member id or not
        the problem with this however is that since the ID-counter never decrements(even when amember
@@ -1581,9 +1955,12 @@ Account get_account_by_id(const ID id)
     
     
     bool ascending = acc_p==HEAD->next ? true : false;
+    pthread_mutex_unlock(&glock);
     
     while(acc_p!=NULL)
     {
+        pthread_mutex_lock(&glock);
+        
         if(((Account)(acc_p->account))->id==id) break;
 
         /* break flow the moment its detected that the account was deleted. this is made easy by 
@@ -1592,9 +1969,17 @@ Account get_account_by_id(const ID id)
         if((!ascending) && (((Account)(acc_p->account))->id < id)) return NULL;
 
         acc_p = ascending ? acc_p->next: acc_p->prev;
+    
+        pthread_mutex_unlock(&glock);
     }
     
-    return acc_p==NULL ? NULL : (Account)(acc_p->account); /*if return is NULL, that account was deleted*/
+    pthread_mutex_lock(&glock);
+    
+    Account acc_match = acc_p==NULL ? NULL : (Account)(acc_p->account); /*if return is NULL, that account was deleted*/
+    
+    pthread_mutex_unlock(&glock);
+    
+    return acc_match;
 }
 
 ID account_id(Account account)
@@ -1603,13 +1988,18 @@ ID account_id(Account account)
     return account->id;
 }
 
-void monthly_operations(float auto_refill_percentages[][2], FILE *fout)
+bool monthly_operations(float auto_refill_percentages[][2], FILE *fout)
 {
 
     /* perform all monthly operations */
-    auto_refill(NULL, auto_refill_percentages,fout);
-    calculate_tvc(NULL,fout);
-    award_rank_monthly_bonuses(NULL, fout);
+    
+    bool status;
+
+    auto_refill(NULL, auto_refill_percentages,fout) ? 1: (status=false);
+    calculate_tvc(NULL,fout) ? 1: (status=false);
+    award_rank_monthly_bonuses(NULL, fout) ? 1: (status=false);
+
+    return status;
 }
 
 bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name)
@@ -1618,7 +2008,8 @@ bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_
 
     bool status = false;
 
-    FILE *fout = fopen(fout_name, "w");
+    FILE *fout = fopen(fout_name, "w"); fclose(fout);
+    fout = fopen(fout_name, "a");
     
     if(auto_refill_percentages==NULL && MONTHLY_AUTO_REFILL_PERCENTAGES==NULL)
     {
@@ -1627,13 +2018,12 @@ bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_
         return status;
     }
     if(auto_refill_percentages!=NULL) /* use given %ges but dont update the defaults */
-        monthly_operations(auto_refill_percentages, fout);
+        status = monthly_operations(auto_refill_percentages, fout);
     else
-        monthly_operations(MONTHLY_AUTO_REFILL_PERCENTAGES, fout);
+        status = monthly_operations(MONTHLY_AUTO_REFILL_PERCENTAGES, fout);
     
     fclose(fout);
 
-    status = true;
     return status;
 }
 
@@ -1654,10 +2044,15 @@ void gfree(void *p)
 /* data constants modifiers*/
 bool set_constant(String constant, Amount value)
 {        
+    if(!GLOCK_INITIALISED)
+        return false;
+
     if (value<=0) return false; 
     
     bool status = true;
     
+    pthread_mutex_lock(&glock);
+
     if(!strcmp(constant, "payment-day")) PAYMENT_DAY = (int)value;
     else if(!strcmp(constant, "point-factor")) POINT_FACTOR = value;
     else if(!strcmp(constant, "account-creation-fee")) ACCOUNT_CREATION_FEE = value;
@@ -1670,12 +2065,20 @@ bool set_constant(String constant, Amount value)
 
     /* dump changes to file so that init sets them the next time the system is rebooted */
 
+    pthread_mutex_unlock(&glock);
+
     return status;
 }
 
 bool dump_constants(String jermCrypt_path, String save_dir)
 {
+
+    if(!GLOCK_INITIALISED)
+        return false;
+
     bool status = false;
+
+    pthread_mutex_lock(&glock);
 
     unsigned int buff_length;
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
@@ -1691,19 +2094,19 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     FILE *fout = fopen(data_file_path,"wb");
 
-    if(!fout) return status;
+    if(!fout) {pthread_mutex_unlock(&glock); return status;}
 
     /* load function from jermCrypt library eg; */
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
-    if(!libjermCrypt) {fclose(fout); return status;}
+    if(!libjermCrypt) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
     /* encrypt_file prototype in libjermCrypt.so */
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose)
     
     char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
 
-    if(encrypt_file==NULL) return status;
+    if(encrypt_file==NULL) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
     fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
@@ -1733,14 +2136,22 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     dlclose(libjermCrypt);
 
+    pthread_mutex_unlock(&glock);
+    
     return status;
 }
 
 bool load_constants(String jermCrypt_path, String save_dir)
 {
+    if(!GLOCK_INITIALISED)
+        return false;
+
     bool status = false;
 
     unsigned int buff_length;
+
+    pthread_mutex_lock(&glock);
+
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
     
@@ -1754,12 +2165,12 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     FILE *fin = fopen(data_file_path,"rb");
 
-    if(!fin) return status;
+    if(!fin) {pthread_mutex_unlock(&glock); return status;}
 
     /* load function from jermCrypt library eg; */
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
-    if(!libjermCrypt) {fclose(fin); return status;}
+    if(!libjermCrypt) {fclose(fin); pthread_mutex_unlock(&glock); return status;}
 
     /* encrypt_file & decrypt_file prototypes in libjermCrypt.so */
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
@@ -1769,7 +2180,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     char *(*decrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "decrypt_file");
 
-    if(encrypt_file==NULL || decrypt_file==NULL) return status;
+    if(encrypt_file==NULL || decrypt_file==NULL) {fclose(fin); pthread_mutex_unlock(&glock); return status;}
 
     fclose(fin);
 
@@ -1821,16 +2232,24 @@ bool load_constants(String jermCrypt_path, String save_dir)
     status = true;
     dlclose(libjermCrypt);
 
+    pthread_mutex_unlock(&glock);
+    
     return status;
 }
 
 bool save_structure(String jermCrypt_path, String save_dir)
 {
+    if(!GLOCK_INITIALISED)
+        return false;
+
     if(HEAD==NULL) return true; /* thereis nothing to save, so no error !*/
     
     bool status = false;
 
     unsigned int buff_length;
+
+    pthread_mutex_lock(&glock);
+
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
     
@@ -1844,19 +2263,20 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     FILE *fout = fopen(data_file_path,"wb");
 
-    if(!fout) return status;
+    if(!fout) {pthread_mutex_unlock(&glock); return status;}
 
     /* load function from jermCrypt library eg; */
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
-    if(!libjermCrypt) {fclose(fout); return status;}
+    if(!libjermCrypt) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
     /* encrypt_file prototype in libjermCrypt.so */
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose)
     
     char *(*encrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "encrypt_file");
 
-    if(encrypt_file==NULL) {dlclose(libjermCrypt); return status;}
+    if(encrypt_file==NULL) 
+        {dlclose(libjermCrypt); fclose(fout); pthread_mutex_unlock(&glock); return status;return status;}
 
     /* dump entire structure to the file now... */
 
@@ -2009,6 +2429,8 @@ bool save_structure(String jermCrypt_path, String save_dir)
     status = true;
     dlclose(libjermCrypt);
 
+    pthread_mutex_unlock(&glock);
+
     return status;
 
 }
@@ -2031,9 +2453,15 @@ bool load_structure(String jermCrypt_path, String save_dir)
       meant to go) so to prevent that, use a width specifier eg %50[^\x1]s will snac upto 50 xters 
     */
 
+    if(!GLOCK_INITIALISED)
+        return false;
+
     bool status = false;
 
     unsigned int buff_length;
+
+    pthread_mutex_lock(&glock);
+
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
     
@@ -2047,12 +2475,12 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     FILE *fin = fopen(data_file_path,"rb");
 
-    if(!fin) return status;
+    if(!fin) {pthread_mutex_unlock(&glock); return status;}
 
     /* load function from jermCrypt library eg; */
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
-    if(!libjermCrypt) {fclose(fin); return status;}
+    if(!libjermCrypt) {fclose(fin); pthread_mutex_unlock(&glock); return status;}
 
     /* encrypt_file & decrypt_file prototypes in libjermCrypt.so */
     // char *encrypt_file(char *fin, char *pswd, char *fout, int overwrite, int verbose);
@@ -2062,7 +2490,8 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     char *(*decrypt_file)(char*,char*,char*,int,int) = dlsym(libjermCrypt, "decrypt_file");
 
-    if(encrypt_file==NULL || decrypt_file==NULL) {dlclose(libjermCrypt); return status;}
+    if(encrypt_file==NULL || decrypt_file==NULL) 
+        {dlclose(libjermCrypt); fclose(fin); pthread_mutex_unlock(&glock); return status;}
 
     fclose(fin);
 
@@ -2465,11 +2894,20 @@ bool load_structure(String jermCrypt_path, String save_dir)
     status = true;
     dlclose(libjermCrypt);
 
+    pthread_mutex_unlock(&glock);
+
     return status;
 }
 
 bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], String jermCrypt_path, String save_dir)
 {
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO update M-A-Rs. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
     bool status = false;
     
     if(auto_refill_percentages==NULL) return status;
@@ -2481,6 +2919,8 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
     
     if(num_of_arps)
     {
+        pthread_mutex_lock(&glock);
+        
         if(MONTHLY_AUTO_REFILL_PERCENTAGES!=NULL)
         {
             bool deleting = true;
@@ -2502,6 +2942,8 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
             MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = auto_refill_percentages[i][0]; 
             MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = auto_refill_percentages[i][1];
         }
+
+        pthread_mutex_unlock(&glock);
         
         status = dump_constants(jermCrypt_path, save_dir);
     

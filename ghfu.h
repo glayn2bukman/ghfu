@@ -9,6 +9,10 @@
                       in recurssion. a project like this that may perform millions of recursice-like
                       calculations would get considerably slow if recursion was used instead of 
                       iteration
+
+    NB: this program is thread-safe so no pressure on whoever is calling libjermGHFU.so from the server program
+        the url <http://www.thegeekstuff.com/2012/05/c-mutex-examples/?refcom> is a nice place to see the logic
+        used here(mutex locks)
 */
 
 /* library inclusion */
@@ -17,6 +21,8 @@
 #include<string.h>
 #include<time.h>
 #include<dlfcn.h>
+
+#include<pthread.h>
 
 
 /* type declarations */
@@ -114,19 +120,19 @@ AccountPointer HEAD, TAIL;
 /* function prototypes */
 void memerror(FILE *fout);
 void init(String jermCrypt_path, String save_dir);
-void increment_pv(Account account, const Amount points, FILE *fout);
-void award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
+bool increment_pv(Account account, const Amount points, FILE *fout);
+bool award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
 bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, FILE *fout);
 bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name);
 Account register_member(Account uplink, String names, Amount amount, FILE *fout);
 ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 
-void buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, FILE *fout);
-void purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name);
-void auto_refill(Account account, float percentages[][2], FILE *fout);
+bool buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, FILE *fout);
+bool purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name);
+bool auto_refill(Account account, float percentages[][2], FILE *fout);
 bool raise_rank(Account account, FILE *fout);
-void calculate_tvc(Account account, FILE *fout);
-void award_rank_monthly_bonuses(Account account, FILE *fout);
+bool calculate_tvc(Account account, FILE *fout);
+bool award_rank_monthly_bonuses(Account account, FILE *fout);
 
 /* functions to visually display accounts */
 void show_commissions(const Account account);
@@ -136,10 +142,10 @@ void show_direct_children(const Account account);
 void structure_details(const Account account); 
 
 /* functions to dump account information to secondary interfaces accessed by other APIs eg from Python */
-void dump_commissions(const Account account, FILE *fout);
-void dump_leg_volumes(const Account account, FILE *fout);
-void dump_investments(const Account account, FILE *fout);
-void dump_direct_children(const Account account, FILE *fout);
+bool dump_commissions(const Account account, FILE *fout);
+bool dump_leg_volumes(const Account account, FILE *fout);
+bool dump_investments(const Account account, FILE *fout);
+bool dump_direct_children(const Account account, FILE *fout);
 bool dump_structure_details(ID account_id, String fout_name); 
 
 bool redeem_points(Account account, Amount amount, FILE *fout);
@@ -151,7 +157,7 @@ void join_strings(char buff[], const String strings[]);
 Account get_account_by_id(const ID id);
 ID account_id(Account account);
 
-void monthly_operations(float auto_refill_percentages[][2], FILE *fout);
+bool monthly_operations(float auto_refill_percentages[][2], FILE *fout);
 bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name);
 
 void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
@@ -172,3 +178,6 @@ bool load_constants(String jermCrypt_path, String save_dir);
 bool load_structure(String jermCrypt_path, String save_dir);
 
 bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], String jermCrypt_path, String save_dir);
+
+/* thread-safe variables */
+pthread_mutex_t glock;

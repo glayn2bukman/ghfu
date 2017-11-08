@@ -4,6 +4,9 @@ char *DATA_FILE = "data.ghfu";
 char *STRUCTURE_FILE = "structure.ghfu";
 char *JERM_CRYPT_PASSWORD = "j<ermG.hfuCrypt>";
 
+/* the global-lock checker (the GL ensures that we have a thread-safe program)*/
+bool GLOCK_INITIALISED = false;
+
 /* the conversion factor from amount($) to points */
 #define TBB_MAX_GENERATIONS 7
 
