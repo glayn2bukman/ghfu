@@ -989,27 +989,22 @@ bool raise_rank(Account account, FILE *fout)
 
     pthread_mutex_lock(&glock);
     
-    while((RANK_DETAILS[rank][3]!=1) && ++rank)
+    while((RANK_DETAILS[rank][1]!=1) && ++rank)
     {
         if(!(
-                (account->highest_leg_ranks[0]>=RANK_DETAILS[rank][0]) &&
-                (account->highest_leg_ranks[1]>=RANK_DETAILS[rank][1]) &&
-                (account->highest_leg_ranks[2]>=RANK_DETAILS[rank][2]) &&
+                ((account->highest_leg_ranks[0]>=RANK_DETAILS[rank][0]) ||
+                (account->highest_leg_ranks[1]>=RANK_DETAILS[rank][0]) ||
+                (account->highest_leg_ranks[2]>=RANK_DETAILS[rank][0])) 
+                
+                &&
 
-                (account->pv>=RANK_DETAILS[rank][3]) &&
+                (account->pv>=RANK_DETAILS[rank][1]) 
+                
+                &&
+                
                 ((account->leg_volumes[0]+account->leg_volumes[1] +
-                    account->leg_volumes[2])>=RANK_DETAILS[rank][4]) &&
+                    account->leg_volumes[2])>=RANK_DETAILS[rank][2])
 
-                /* lastly, check for the lesser-leg volume */
-                ((account->leg_volumes[0]<account->leg_volumes[1] ? 
-                    (account->leg_volumes[0]<account->leg_volumes[2] ? 
-                        account->leg_volumes[0] : account->leg_volumes[2]
-                    ) 
-                    : 
-                    (account->leg_volumes[1]<account->leg_volumes[2] ? 
-                        account->leg_volumes[1] : account->leg_volumes[2]
-                    )
-                ) >= RANK_DETAILS[rank][5])
         )) {--rank; break;}
     }
 
@@ -1021,7 +1016,7 @@ bool raise_rank(Account account, FILE *fout)
 
     rank_raised = true;
     
-    if(RANK_DETAILS[rank][6])
+    if(RANK_DETAILS[rank][3])
     {
         unsigned int buff_length=0;
         String reason_strings[] = {"DRA, new rank is <", RANKS[rank], ">", "\0"};
@@ -1029,7 +1024,7 @@ bool raise_rank(Account account, FILE *fout)
         char buff[buff_length+1];
         join_strings(buff,reason_strings);
 
-        award_commission(account, RANK_DETAILS[rank][6], "DRA", buff, fout);
+        award_commission(account, RANK_DETAILS[rank][3], "DRA", buff, fout);
     }
     
     pthread_mutex_lock(&glock);

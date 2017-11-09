@@ -77,26 +77,25 @@ char *RANKS[] = {
     /*12*/ "\0", /* termination condition*/
 };
 
-float RANK_DETAILS[][7] = {
+float RANK_DETAILS[][4] = {
     /* volumes required to reach a certain rank. order;
-        the three leg ranks, annual-minimum-PV, cummulative-organisation-volume, 
-        cummulative-lesser-leg-volume, director's recorgnition award
+        higest rank in any of the legs, PV, cummulative organisation volume, award
          
     */
-    /*0*/  {0,0,0,    0,0,0,             0},
-    /*1*/  {0,0,0,    100,500,100,       0},
-    /*2*/  {1,1,1,    100,2000,500,      0},
-    /*3*/  {2,2,2,    100,5000,2000,     0},
-    /*4*/  {3,3,3,    100,15000,5000,    0},
-    /*5*/  {4,4,4,    200,50000,15000,   500},
-    /*6*/  {5,5,5,    200,200000,50000,  1000},
-    /*7*/  {6,6,5,    200,500000,200000, 2500},
-    /*8*/  {7,7,5,    200,0,0,           6000},
-    /*9*/  {8,8,5,    0,0,0,             15000},
-    /*10*/ {9,9,5,    0,0,0,             25000},
-    /*11*/ {10,10,5,  0,0,0,             50000},
+    /*0*/  {0,  0,    0,        0},
+    /*1*/  {0,  100,  1000,     0},
+    /*2*/  {0,  100,  3000,     0},
+    /*3*/  {0,  100,  10000,    0},
+    /*4*/  {0,  100,  30000,    0},
+    /*5*/  {0,  200,  100000,   500},
+    /*6*/  {0,  200,  300000,   1000},
+    /*7*/  {0,  200,  1000000,  2500},
+    /*8*/  {7,  0,    0,        6000},
+    /*9*/  {8,  0,    0,        15000},
+    /*10*/ {9,  0,    0,        25000},
+    /*11*/ {10, 0,    0,        50000},
     
-    /*12*/ {0,0,0,    1,1,1,             0} /* terminating condition */
+    /*12*/ {0,  1,    1,        0} /* terminating condition */
 };
 
 /* commission/bonus ranges (all amounts in points NOT $)*/
