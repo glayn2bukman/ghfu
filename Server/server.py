@@ -5,8 +5,10 @@
     data at the same time
     
     ==== MARTIN'S WARNING ====
-    no account sould be logged in more than once at any one time. this will greatly reduce on the thread-safe
-    labor libjermGHFU.so has
+    no account sould be logged in more than once at any one time. this will greatly reduce on the 
+    thread-safe labor libjermGHFU.so has. infact, if one account is logged on twice simultaneously, this
+    will fuck up every thing in terms of server log responses as (look at how the logfile is defines in 
+    every function to understand this)
     
     ==== RUNNING & DEBUGGING ====     
     the server program, in debugging mode, Ctrl-C/Z might not stop the program completely. in that case, 
@@ -35,7 +37,7 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, time, threading
+import os, sys, json, threading
 
 from ctypes import *
 
@@ -69,9 +71,12 @@ known_clients = "127.0.0.1"
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
 
+mutex = threading.Lock()
+
 # remove used uncessesary file
 def rm(f):
-    os.remove(f)
+    try:os.remove(f)
+    except:pass
 
 # modify file path
 def file_path(fname):
@@ -79,9 +84,12 @@ def file_path(fname):
 
 # function to fetch logs/errors
 def info(fname):
-    with open(file_path(fname),"r") as f: 
-        return f.read()
-
+    try:
+        with open(file_path(fname),"r") as f: 
+            return f.read()
+    except:
+        return "failed to access json file. is account signed in multiple times"
+        
 # define a function that wil allow responses to be sent to pages not served by this server
 def reply_to_remote(reply):
     response = Response(reply)
@@ -154,7 +162,7 @@ def register():
         reply["log"] = "you dont have the permission to add accounts to ROOT!"
         return reply_to_remote(jencode(reply))
     else:
-        logfile = file_path("{}".format(time.time()))
+        logfile = file_path("{}{}{}.reg".format(uplink_id,names,deposit))
 
         account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
         if account_id: 
@@ -214,11 +222,14 @@ def details():
         reply["log"] = "silly data provided; parameter <id>"
         return reply_to_remote(jencode(reply))
     
-    jsonfile = os.path.join(path, "files","json","{}".format(time.time()))
+    jsonfile = os.path.join(path, "files","json","{}.json".format(account_id))
         
     if libghfu.dump_structure_details(account_id, jsonfile):
-        with open(jsonfile, "r") as f: reply = f.read()
-        rm(jsonfile)
+        try:
+            with open(jsonfile, "r") as f: reply = f.read()
+            rm(jsonfile)
+        except:
+            reply["log"] = "failed to access json file. is account signed in multiple times"
     else:
         reply["log"] = "no account matching requested target!"
         reply = jencode(reply)
@@ -265,11 +276,14 @@ def buy_package():
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
 
-    logfile = file_path("{}".format(time.time()))
+    logfile = file_path("{}{}{}.buy_pkg".format(IB_id,amount,is_member))
 
     libghfu.purchase_property(IB_id, c_float(amount), is_member, buyer_names, logfile)
     if info(logfile):
-        with open(logfile, "r") as f: reply["log"] = f.read()
+        try: 
+            with open(logfile, "r") as f: reply["log"] = f.read()
+        except:
+            reply["log"] = "failed to access json file. is account signed in multiple times"
     else: 
         reply["status"]=True
 
@@ -391,7 +405,7 @@ def invest():
         reply["log"] = "silly data provided; parameter <package_id>"
         return reply_to_remote(jencode(reply))
 
-    logfile = file_path("{}".format(time.time()))
+    logfile = file_path("{}{}{}{}.inv".format(account_id,amount,package,package_id))
 
     package = str(package)
     

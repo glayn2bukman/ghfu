@@ -1856,7 +1856,7 @@ bool dump_structure_details(ID account_id, String fname)
 
     Account account = get_account_by_id(account_id);
 
-    printf("done\n");
+    //printf("done\n");
 
     bool status = false;
 

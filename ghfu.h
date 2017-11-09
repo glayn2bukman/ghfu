@@ -17,13 +17,17 @@
 
 
         DONT FUCK WITH THE pthread_mutex_[un]lock(&glock) CALLS. THEY ARE THE BASIS OF ALL POSSIBLE BUGS
-        INTRODUCED BY MULTI-THREADING/PROCESSING. TAKE YOUR TIME TO FULLY UNDERSTAND WHY EACH CALL IS
+        INTRODUCED BY MULTI-THREADING. TAKE YOUR TIME TO FULLY UNDERSTAND WHY EACH CALL IS
         PRECICELY WHERE IT IS AND NO A LINE AFTER OR BEFORE! IF THESE CALLS ARE MESSED WITH, YOU GOT 
         YOURSELF A DEAD-LOCKED PROGRAM (ONE THREAD/FUNCTION LOCKS A mutex AND DOESN'T UNLOCK IT (maybe 
         it exited ubruptly, or called another function that needs a variable locked by the function calling 
         the new function eg invest_money calls award_commission at one point an in this case, care must be
         takn to ensure that invest_money only calls award_commission after ensuring any variable needed by
         award_commission is unlocked...simpler said than done :):):) )) 
+
+        on my development machine (Dell-Inspiron-3542), the maximum number of threads a process could 
+        dispatch is 30503 so my python server could handle a maximum of 30503 concurrent connections
+        thus dispatching a maximum of 30503 threads to libjermGHFU.so
 */
 
 /* library inclusion */
