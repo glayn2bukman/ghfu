@@ -112,9 +112,9 @@ def test():
 
     if not client_known(request.remote_addr): 
         return reply_to_remote("You are not authorised to access this server!"),401
-    reply = "Server is up!"
+    reply = {"status":"Server is up!"}
     
-    return reply_to_remote(reply)
+    return reply_to_remote(jencode(reply))
     
 
 @app.route("/register",methods=["POST"])
@@ -251,7 +251,7 @@ def buy_package():
     if json_req:
         IB_id = json_req.get("IB_id",-1)
         amount = json_req.get("amount",-1)
-        is_member = json_req.get("buyer_is_member", 0)
+        is_member = json_req.get("buyer_is_member", False)
         buyer_names = str(json_req.get("buyer_names", "bought package")) # use packag name if registered member is the one 
                                                                     # buying
         is_member = 1 if is_member else 0 # convert from True/False to 1/0 (C daint have bools)
@@ -259,7 +259,7 @@ def buy_package():
     else:
         IB_id = request.form.get("IB_id",-1)
         amount = request.form.get("amount",-1)
-        is_member = request.form.get("buyer_is_member", 0)
+        is_member = request.form.get("buyer_is_member", "false")
         buyer_names = request.form.get("buyer_names", "bought package")
 
         try:
