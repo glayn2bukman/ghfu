@@ -1,8 +1,8 @@
 import os, sys, json, time
 from ctypes import *
 
-root = os.path.realpath(__name__)
-root = os.path.split(root)[0]
+root = os.path.realpath(__file__)
+root = os.path.split(os.path.split(root)[0])[0]
 
 fout = os.path.join(root,"test","log")
 jout = os.path.join(root,"test","json")

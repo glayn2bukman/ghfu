@@ -1286,15 +1286,21 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
             pthread_mutex_unlock(&glock);                
             
-            if(actual_lower_leg_volume)
+            /* are these funny bonuses given on the actual_LLV or on the LLV? i used the LLV */
+            if(lower_leg_volume)
             {
-                award_commission(account, actual_lower_leg_volume, "HOB", "HOB",fout);
-                                
-                if(account->rank>=8)
+                if(account->rank<11)
                 {
-                    award_commission(account, actual_lower_leg_volume, "LCB", "LCB",fout);
-                    award_commission(account, actual_lower_leg_volume, "EAB", "EA bonus",fout);
+                    award_commission(account, lower_leg_volume, "HOB", "HOB",fout);
+                                    
+                    if(account->rank>=8)
+                    {
+                        award_commission(account, lower_leg_volume, "LCB", "LCB",fout);
+                        award_commission(account, lower_leg_volume, "EAB", "EA bonus",fout);
+                    }
                 }
+                else
+                    award_commission(account, lower_leg_volume, "EAB", "EA bonus",fout);
             }
         }
         else
@@ -1330,14 +1336,21 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
             pthread_mutex_unlock(&glock);
             
-            if(actual_lower_leg_volume)
+            /* are these funny bonuses given on the actual_LLV or on the LLV? i used the LLV */
+            if(lower_leg_volume)
             {
-                award_commission(acc, actual_lower_leg_volume, "HOB", "HOB",fout);
-                if(acc->rank>=8)
+                if(acc->rank<11)
                 {
-                    award_commission(acc, actual_lower_leg_volume, "LCB", "LCB",fout);
-                    award_commission(acc, actual_lower_leg_volume, "EAB", "EA bonus",fout);
+                    award_commission(acc, lower_leg_volume, "HOB", "HOB",fout);
+                                    
+                    if(acc->rank>=8)
+                    {
+                        award_commission(acc, lower_leg_volume, "LCB", "LCB",fout);
+                        award_commission(acc, lower_leg_volume, "EAB", "EA bonus",fout);
+                    }
                 }
+                else
+                    award_commission(acc, lower_leg_volume, "EAB", "EA bonus",fout);
             }
         }
         else

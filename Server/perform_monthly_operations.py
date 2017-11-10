@@ -10,5 +10,8 @@
     4) wait for the next day and repeat
 """
 
+import os
 from ctypes import *
 
+root = os.path.realpath(__file__)
+root = os.path.split(os.path.split(root)[0])[0]

@@ -41,7 +41,8 @@ import os, sys, json, threading
 
 from ctypes import *
 
-path = os.path.split(os.path.realpath(__name__))[0]
+path = os.path.realpath(__file__)
+path = os.path.split(os.path.split(path)[0])[0]
 
 libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 
