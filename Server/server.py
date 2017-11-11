@@ -37,7 +37,7 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, threading
+import os, sys, json, threading, time
 
 from ctypes import *
 
@@ -50,7 +50,7 @@ libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 libghfu.invest.argtypes = [c_long, c_float, c_char_p, c_long, c_int, c_char_p]
 libghfu.dump_structure_details.argtype = [c_long, c_char_p]
 libghfu.get_account_by_id.argtypes = [c_long]
-libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
+#libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
 libghfu.purchase_property.argtypes = [c_long, c_float, c_int, c_char_p, c_char_p]
 libghfu.redeem_account_points.argtypes = [c_long, c_float, c_char_p]
 libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
@@ -73,6 +73,8 @@ jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
 
 mutex = threading.Lock()
+
+LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
 # remove used uncessesary file
 def rm(f):
@@ -482,6 +484,54 @@ def update_auto_refills():
 
     return reply_to_remote(jencode(reply))
     
+
+@app.route("/monthly_operations", methods=["POST"])
+def perform_monthly_operations():
+    if not client_known(request.remote_addr): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    if request.remote_addr!="127.0.0.1":
+        # the only authorized script to call this is local to the system (infact, its in the same directory
+        # as this server script!)
+        return reply_to_remote(jencode({"status":False, 
+            "log":"You are not authorised to perform this operation!"}))
+
+    json_req = request.get_json()
+    
+    if not json_req:
+        return reply_to_remote("You are not authorised to perform this operation!"),401
+        
+    ID = json_req.get("id", "")
+
+    if (not ID) or ID!="5892cdfWTCSDFEWW8965432":
+        return reply_to_remote("You are not authorised to perform this operation!"),401
+
+    pd = c_int.in_dll(libghfu, "PAYMENT_DAY").value
+
+    t = time.gmtime()
+    today = [t[0], t[1], t[2]]
+    
+    if pd!= today[2]:
+        return reply_to_remote(jencode({"status":False, "log":"not payment day"}))
+    
+    global LAST_PERFORMED_MONTHLY_OPERATIONS
+    
+    if today==LAST_PERFORMED_MONTHLY_OPERATIONS:
+        return reply_to_remote(jencode({"status":False, "log":"operation already performed"}))
+
+    LAST_PERFORMED_MONTHLY_OPERATIONS = today[:]
+
+    # the auto-refill percentages should have been set atleast 2 days ago so we dont specify any
+    # percentages to libghfu.perform_monthly_operations so that it can use the latest values
+
+    logfile = file_path("mo.ghfu")
+
+    libghfu.perform_monthly_operations(None, logfile)
+
+    rm(logfile)
+
+    return reply_to_remote(jencode({"status":True, "log":""}))
+
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
