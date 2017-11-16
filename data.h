@@ -1,3 +1,7 @@
+/*
+This header file contains the primary DATA values for the project GHFU
+*/
+
 /* the jermCrypt library */
 char *JERM_CRYPT_LIB = "libjermCrypt.so";
 char *DATA_FILE = "data.ghfu";
@@ -129,10 +133,10 @@ float FSB[][2] = { /* Fast-Start-Bonus */
 };
 
 float TBB[][TBB_MAX_GENERATIONS+1] = { /* Team-Building-Bonus */
-    /* array-values are in format {PV+, %1st-gen commission, %2nd-gen commission,...,%9th-gen commission} */
+    /* array-values are in format {PV+, %1st-gen commission, %2nd-gen commission,...,%7th-gen commission} */
     /* NB: the first generation is the person brought by someone you joined NOT the person you joined! */
     
-    /* the last value in each array is 0(terminating condition) */
+    /* the terminating condition is TBB_MAX_GENERATIONS for any array(except the last array) */
     
     {0,.5,.5,0,0,0,0,0},
     {120,.5,.5,.5,.5,0,0,0},

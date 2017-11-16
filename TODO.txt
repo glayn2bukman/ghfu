@@ -1,0 +1,4 @@
+v1.1.* todo list
+
+1) add structure for redeems. this will hold all redeems of an account (more like commissions or 
+   investments are held)

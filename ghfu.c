@@ -246,6 +246,8 @@ bool award_commission(Account account, Amount points, String commission_type, St
         i = FSB[i][1] ? i : --i; /* could have brocken up from the {0,0} terminating array*/
 
         p_comm = (FSB[i][1]/100)*points;
+
+        //update_pv = true;        
         
     }
     else if(!strcmp(commission_type,"IBC"))
@@ -286,14 +288,14 @@ bool award_commission(Account account, Amount points, String commission_type, St
         
         while((generation<TBB_MAX_GENERATIONS) && (uplink!=NULL))
         /* the 2 conditions are arranged in that order for a reason; when we have a sufficiently large 
-           structure, its mch more likely that we shall reach the generation<10 barrier of TBBs before
+           structure, its mch more likely that we shall reach the generation<7 barrier of TBBs before
            we reach the root node for that given lineage!
         */
         {
             int i=0;
             for(; TBB[i][1]; ++i)
             {
-                if(account->pv < TBB[i+1][0]) break;
+                if(uplink->pv < TBB[i+1][0]) break;
             }
             
             i = TBB[i][1] ? i : --i; /* could have brocken up from the {0,0} terminating array*/
@@ -526,8 +528,7 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
     }
 
-
-    increment_pv(account, points, fout);
+    increment_pv(account,points,fout);
 
     return true; /* leave this out and you have memory leaks when invest money is called from regiter_member*/
 }
@@ -747,11 +748,14 @@ bool buy_property(Account IB_account, Amount amount, bool member, String buyer_n
         award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
     }
 
+
     pthread_mutex_lock(&glock);
     
     SYSTEM_FLOAT += amount;
     
     pthread_mutex_unlock(&glock);
+
+    increment_pv(IB_account,points,fout);
 
     return true;
 }

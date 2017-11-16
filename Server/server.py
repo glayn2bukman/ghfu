@@ -72,7 +72,7 @@ known_clients = "127.0.0.1"
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
 
-mutex = threading.Lock()
+#mutex = threading.Lock()
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
@@ -540,7 +540,7 @@ if __name__=="__main__":
     # create contemporary member...to act as first member in case theere are no members yet in structure
     libghfu.register_new_member(0, "PSEUDO-ROOT",
         c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
-        c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value+180+500,
+        c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value,
         file_path("pseudo-root"))
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)
