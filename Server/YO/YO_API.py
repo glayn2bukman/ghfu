@@ -203,8 +203,11 @@ def transform_number(number, country):
         return "Error: destination number is invalid!"
 
     # validate destination...
-    if number[0]=="0": return country_codes[country][1:]+number[1:]
-    return (number if number[0]!="+" else number[1:])
+    if number[0]=="0": number = country_codes[country][1:]+number[1:]
+    number = (number if number[0]!="+" else number[1:])
+
+    if len(number)==12: return number #eg 256783573700
+    return "Error: invalid number provided"
 
 # ---------------------------------------------------------------
 
@@ -303,7 +306,9 @@ def get_balance():
     # as for example the returned xml will have diffent balances for the different currencies. read the YO!
     # payments API (pg 39) for a detailed explanation
      
-    request = send_request("get_balance", mtd="balance", uname=get_data("general")["uname"], password=get_data("general")["pswd"])
+    request = send_request("get_balance", mtd="balance", 
+        uname=get_data("general")["uname"], 
+        password=get_data("general")["pswd"])
 
     return request
 #.
@@ -342,7 +347,6 @@ def initiate_DB():
     if not os.path.isdir(os.path.join(PATH, "db")):
         os.mkdir(os.path.join(PATH, "db"))
 
-    db_name = "Transactions.db"
     tables = {"Transactions":[  
                 ("reference", "varchar(15)"), ("transcation", "varchar(25)"), ("date_time","varchar(30)"),
                 ("status", "varchar(10)"), ("amount", "float(2)"), ("account","varchar(15)"), ("email", "varchar(50)")
@@ -351,12 +355,13 @@ def initiate_DB():
 
     global transactions_db
     
-    try: transactions_db = db.Database(os.path.join(PATH, "db", db_name), tables)
+    try: transactions_db = db.Database(os.path.join(PATH, "db", transactions_db_name), tables)
     except:
         print "failed to create transaction db...re-run this YO_API script please"
         sys.exit(1)
 
 # initiate the db right away...
+transactions_db_name = "Transactions.db"
 initiate_DB()
 
 # print [field[0] for field in transactions_db.fields]

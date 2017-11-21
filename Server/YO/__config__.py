@@ -30,6 +30,24 @@ COUNTRY_CODES = {
     'Burundi':'+257',
 }
 
+MINIMUM_WITHDRAW = 3000 # ~ $1
+
+#------------------------------------------------------------------
+
+CHARGES = {
+    # if charge<1, the value is a percentage, else, value is an absolute value
+    'upload':{
+        'YO':.03,
+        'mobile-money':0,
+        'banks':0 # this fee is not yet clear but when it is, update this ASAP!
+    },
+    'withdraw':{
+        'YO':250,
+        'mobile-money':1000, # mtn=390 n airtel=300 but rounded off this figure to this value
+        'banks':0 #
+    }
+}
+
 #------------------------------------------------------------------
 
 try:
