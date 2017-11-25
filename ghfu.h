@@ -142,9 +142,9 @@ bool invest(ID account_id, const Amount amount, const String package, const ID p
 Account register_member(Account uplink, String names, Amount amount, FILE *fout);
 ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 
-bool buy_property(Account IB_account, const Amount amount, const bool member, const String buyer_names, FILE *fout);
-bool purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name);
-bool auto_refill(Account account, float percentages[][2], FILE *fout);
+bool buy_property(Account IB_account, const Amount amount, FILE *fout);
+bool purchase_property(ID IB_account_id, const Amount amount, String fout_name);
+bool auto_refill(Account account, FILE *fout);
 bool raise_rank(Account account, FILE *fout);
 bool calculate_tvc(Account account, FILE *fout);
 bool award_rank_monthly_bonuses(Account account, FILE *fout);
@@ -172,8 +172,8 @@ void join_strings(char buff[], const String strings[]);
 Account get_account_by_id(const ID id);
 ID account_id(Account account);
 
-bool monthly_operations(float auto_refill_percentages[][2], FILE *fout);
-bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name);
+bool monthly_operations(FILE *fout);
+bool perform_monthly_operations(String fout_name);
 
 void ghfu_warn(unsigned int ghfu_errno,FILE *fout);
 void gfree(void *p);

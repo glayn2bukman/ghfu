@@ -247,9 +247,6 @@ bool award_commission(Account account, Amount points, String commission_type, St
 
         p_comm = (FSB[i][1]/100)*points;
 
-        fprintf(stdout,"pv=%.2f; percentage=%.2f%%; points=%.2f; comm=%.2f\n",
-            account->pv,FSB[i][1],points,p_comm);
-
         //update_pv = true;        
         
     }
@@ -704,7 +701,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     return new_account;
 }
 
-bool buy_property(Account IB_account, Amount amount, bool member, String buyer_names, FILE *fout)
+bool buy_property(Account IB_account, Amount amount, FILE *fout)
 {
     /* if member(IV or registered investor), get IBC and those points otherwise just add this amount to 
        the system total float */
@@ -717,28 +714,35 @@ bool buy_property(Account IB_account, Amount amount, bool member, String buyer_n
 
     //printf("buy-property\n");
 
-    Amount points = amount*POINT_FACTOR;
-        
-    if(IB_account==NULL){ghfu_warn(3,fout); return false;}
+    if(!amount){ghfu_warn(17,fout); return false;}
 
-    /* create reason for the commission */
-    String reason_strings[] = {"IBC from ",buyer_names,"\0"};
-    unsigned int buff_length;
-    length_of_all_strings(reason_strings, &buff_length);
-    char reason[buff_length+1];
-    join_strings(reason,reason_strings);
 
-    award_commission(IB_account, points, "IBC", reason,fout);
-
-    if (IB_account->uplink!=NULL)
+    if(IB_account!=NULL)
     {
-        String c_reason_strings[] = {"FSB from ", IB_account->names,"'s package purchase", "\0"};
-        length_of_all_strings(c_reason_strings, &buff_length);
-        char c_reason[buff_length+1];
-        join_strings(c_reason, c_reason_strings);
-        award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
-    }
 
+        Amount points = amount*POINT_FACTOR;
+            
+        /* create reason for the commission */
+        String reason_strings[] = {"IBC from buying yourself a service/package","\0"};
+        unsigned int buff_length;
+        length_of_all_strings(reason_strings, &buff_length);
+        char reason[buff_length+1];
+        join_strings(reason,reason_strings);
+
+        award_commission(IB_account, points, "IBC", reason,fout);
+
+        if (IB_account->uplink!=NULL)
+        {
+            String c_reason_strings[] = {"FSB from ", IB_account->names,"'s package purchase", "\0"};
+            length_of_all_strings(c_reason_strings, &buff_length);
+            char c_reason[buff_length+1];
+            join_strings(c_reason, c_reason_strings);
+            award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
+        }
+
+        increment_pv(IB_account,points,fout);
+
+    }
 
     pthread_mutex_lock(&glock);
     
@@ -746,19 +750,17 @@ bool buy_property(Account IB_account, Amount amount, bool member, String buyer_n
     
     pthread_mutex_unlock(&glock);
 
-    increment_pv(IB_account,points,fout);
-
     return true;
 }
 
-bool purchase_property(ID IB_account_id, const Amount amount, const bool member, const String buyer_names, String fout_name)
+bool purchase_property(ID IB_account_id, const Amount amount, String fout_name)
 {
     /* python/java/etc interface to buy_property*/
     Account IB_account = get_account_by_id(IB_account_id);
 
     FILE *fout = fopen(fout_name, "w");
     
-    bool status = buy_property(IB_account,amount,member,buyer_names,fout);
+    bool status = buy_property(IB_account,amount,fout);
     
     fclose(fout);
 
@@ -1084,7 +1086,7 @@ bool calculate_tvc(Account account, FILE *fout)
         {
             lower_leg_volume = account->leg_volumes[0];
             i = 0;
-            for(; i<2/*only he first 2 legs considered*/; ++i)
+            for(; i<2/*only the first 2 legs considered*/; ++i)
                 lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
                     account->leg_volumes[i] : lower_leg_volume ;
 
@@ -1182,7 +1184,7 @@ bool calculate_tvc(Account account, FILE *fout)
         {
             lower_leg_volume = acc->leg_volumes[0];
             i = 0;
-            for(; i<2/*only he first 2 legs considered*/; ++i)
+            for(; i<2/*only the first 2 legs considered*/; ++i)
                 lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
                     acc->leg_volumes[i] : lower_leg_volume ;
 
@@ -1276,7 +1278,9 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
         if(account->rank>=6) /* rank-bonuses for rank>=Senior Director*/
         {
-            lower_leg_volume = account->leg_volumes[0];
+            // fancy-pants bonuses (HOB,LCB,EAB) are given on the third leg
+            lower_leg_volume = account->leg_volumes[2];
+            /*
             i = 0;
             for(; i<3; ++i)
                 lower_leg_volume = (account->leg_volumes[i])<lower_leg_volume ? 
@@ -1284,6 +1288,7 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
             actual_lower_leg_volume = lower_leg_volume - account->TVC_levels[1];
             account->TVC_levels[1] = lower_leg_volume;
+            */
 
             pthread_mutex_unlock(&glock);                
             
@@ -1326,7 +1331,9 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
         if(acc->rank>=6) /* rank-bonuses for rank>=Senior Director*/
         {
-            lower_leg_volume = acc->leg_volumes[0];
+            // fancy-pants bonuses (HOB,LCB,EAB) are given on the third leg
+            lower_leg_volume = acc->leg_volumes[2];
+            /*
             i = 0;
             for(; i<3; ++i)
                 lower_leg_volume = (acc->leg_volumes[i])<lower_leg_volume ? 
@@ -1334,6 +1341,7 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
             actual_lower_leg_volume = lower_leg_volume - acc->TVC_levels[1];
             acc->TVC_levels[1] = lower_leg_volume;
+            */
 
             pthread_mutex_unlock(&glock);
             

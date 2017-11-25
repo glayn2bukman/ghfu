@@ -44,6 +44,8 @@ char *ERRORS[] = {
     /*14*/ "TVC ONLY AVAILABLE FOR MEMBERS ATLEAST 2 LEGS, EACH WITH ATLEAST ONE DOWNLINK!",
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
     /*16*/ "PLEASE SET THE MONTHLY-AUTO-REFILL-PERCENTAGES",
+    /*17*/ "PACKAGE/SERVICE OF $0 is NOT SOLEDBY THE COMPANY",
+
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
@@ -106,7 +108,7 @@ float RANK_DETAILS[][4] = {
 /* commission/bonus ranges (all amounts in points NOT $)*/
 
 float IBC[][2] = { /* independent-brocker=commissions */
-    /* array-values are in format {PV+, %commision} */
+    /* array-values are in format {PV+, %discount/commission} */
     {0, 35},
     {120, 40},
     {200, 45},

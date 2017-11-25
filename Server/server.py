@@ -56,7 +56,7 @@ libghfu.invest.argtypes = [c_long, c_float, c_char_p, c_long, c_int, c_char_p]
 libghfu.dump_structure_details.argtype = [c_long, c_char_p]
 libghfu.get_account_by_id.argtypes = [c_long]
 #libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
-libghfu.purchase_property.argtypes = [c_long, c_float, c_int, c_char_p, c_char_p]
+libghfu.purchase_property.argtypes = [c_long, c_float, c_char_p]
 libghfu.redeem_account_points.argtypes = [c_long, c_float, c_char_p]
 libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_char_p]
 libghfu.set_constant.argtypes = [c_char_p, c_float]
@@ -287,22 +287,15 @@ def buy_package():
     
     if json_req:
         IB_id = json_req.get("IB_id",-1)
-        amount = json_req.get("amount",-1)
-        is_member = json_req.get("buyer_is_member", False)
-        buyer_names = str(json_req.get("buyer_names", "bought package")) # use packag name if registered member is the one 
-                                                                    # buying
-        is_member = 1 if is_member else 0 # convert from True/False to 1/0 (C daint have bools)
+        amount = json_req.get("amount",0)
 
     else:
         IB_id = request.form.get("IB_id",-1)
         amount = request.form.get("amount",-1)
-        is_member = request.form.get("buyer_is_member", "false")
-        buyer_names = request.form.get("buyer_names", "bought package")
 
         try:
             IB_id = int(IB_id)
             amount = float(amount)
-            is_member = 1 if is_member=="true" else 0
         except:
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
@@ -310,25 +303,20 @@ def buy_package():
     if(IB_id==-1 or type(IB_id)!=type(0) or isinstance(IB_id,unicode) ):
         reply["log"] = "silly data provided; parameter <IB_id>"
         return reply_to_remote(jencode(reply))
-    if(amount==-1 or (not (type(amount)==type(0.0) or type(amount)==type(0))) or isinstance(amount,unicode) ):
+    if(amount==0 or (not (type(amount)==type(0.0) or type(amount)==type(0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
 
-    logfile = file_path("{}{}{}.buy_pkg".format(IB_id,amount,is_member))
+    logfile = file_path("{}{}.buy_pkg".format(IB_id,amount))
 
-    libghfu.purchase_property(IB_id, c_float(amount), is_member, buyer_names, logfile)
-    if info(logfile):
-        try: 
-            with open(logfile, "r") as f: reply["log"] = f.read()
-        except:
-            reply["log"] = "failed to access json file. is account signed in multiple times"
-    else: 
+    if libghfu.purchase_property(IB_id, c_float(amount), logfile):
         reply["status"]=True
 
         threading.Thread(target=libghfu.save_structure, args=(
             os.path.join(path,"lib"), os.path.join(path,"files","saves")
             )).start()
-
+    else:
+        reply["log"] = info(logfile)
 
     rm(logfile)
 
