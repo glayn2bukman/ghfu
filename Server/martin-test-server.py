@@ -81,8 +81,6 @@ jdecode = json.JSONDecoder().decode
 #mutex = threading.Lock()
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
-EXCHANGE_RATE=3500
-TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
 
 # remove used uncessesary file
 def rm(f):
@@ -117,42 +115,29 @@ def client_known(addr):
             if addr==client: return True
     return False
 
-# define function to keep checking on transaction statuses and effect changes to ghfu if the transaction is 
-# verified
-def withdraw_transaction_checker(account_id, amount, reference):
-    while 1:
-
-        try:
-            reply = requests.post("http://0.0.0.0:{}/transaction_status".format(finance_server_port), 
-                json={"code":finance_server_code, "reference":reference}).text
-            reply = jdecode(reply)
-        except: # YO server is down for some reason...
-            time.sleep(TRANSACTION_CHECK_DELAY)
-            continue
-        
-        if reply["status"]:
-            logfile = file_path("{}.withdraw".format(account_id))
-            libghfu.redeem_account_points(account_id, amount, logfile)
-            
-            if info(logfile): 
-                print "error in wihdrawing money fron account <{}>".format(account_id)
-                print logfile
-                        
-            rm(logfile)
-            break
-        
-        time.sleep(TRANSACTION_CHECK_DELAY)
-
-
 @app.route("/test",methods=["GET","POST"])
 def test():
 
-    if not client_known(request.access_route[-1]): 
+    print request.access_route[-1]
+
+    if not client_known(request.access_route[-1]):
         return reply_to_remote("You are not authorised to access this server!"),401
     reply = {"status":"Server is up!"}
     
     return reply_to_remote(jencode(reply))
     
+
+@app.route("/",methods=["GET","POST"])
+def root():
+
+    print request.access_route[-1]
+
+    if not client_known(request.access_route[-1]):
+        return reply_to_remote("You are not authorised to access this server!"),401
+    reply = {"status":"Server is up!"}
+    
+    return reply_to_remote(jencode(reply))
+
 
 @app.route("/register",methods=["POST"])
 def register():
@@ -561,26 +546,14 @@ def perform_monthly_operations():
 
     logfile = file_path("mo.ghfu")
 
-    if libghfu.perform_monthly_operations(logfile):
-        rm(logfile)
+    libghfu.perform_monthly_operations(None, logfile)
 
-        threading.Thread(target=libghfu.save_structure, args=(
-            os.path.join(path,"lib"), os.path.join(path,"files","saves")
-            )).start()
-
-        return reply_to_remote(jencode({"status":True, "log":""}))
-
-    log = info(logfile)
     rm(logfile)
 
-    return reply_to_remote(jencode({"status":False, "log":log}))
-
+    return reply_to_remote(jencode({"status":True, "log":""}))
 
 @app.route("/withdraw", methods=["POST"])
 def withdraw():
-    """
-    attempt a withdraw of funds from the ghfu account. the amount to be withdrawn is in dollars NOT UGX
-    """
     if not client_known(request.access_route[-1]): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
@@ -594,7 +567,7 @@ def withdraw():
 
     account_id = json_req.get("id",0)
     number = json_req.get("number","")
-    amount = json_req.get("amount",0) # amount is in dollars!
+    amount = json_req.get("amount",0)
     token = json_req.get("token","")
 
     if(not account_id) or (not(isinstance(account_id,int))):
@@ -629,64 +602,12 @@ def withdraw():
     
     if "status" in charges:
         return reply_to_remote(jencode(charges))
-        
-    if EXCHANGE_RATE*account_data["available_balance"]<(
-        (EXCHANGE_RATE*amount)+charges["YO"]+charges["mobile-money"]):
+    
+    if account_data["available_balance"]<(amount+charges["YO"]+charges["mobile-money"]):
         reply["log"] = "you have insufficient balance on your account (${})".format(
             account_data["available_balance"]
         )
         return reply_to_remote(jencode(reply))
-
-    try:
-        _reply = requests.post("http://0.0.0.0:{}/withdraw".format(finance_server_port), 
-            json={"amount":(EXCHANGE_RATE*amount), "token":token, "number":number, "code":finance_server_code}).text
-        _reply = jdecode(_reply)
-    except:
-        reply["log"] = "failed to reach local financing server"
-        return reply_to_remote(jencode(reply))
-
-    if not _reply["status"]:
-        reply["log"]="could not process payment, please inform admin about this ASAP!"
-        return reply_to_remote(jencode(reply))
-    
-    reference = _reply["details"]["TransactionReference"] # use this reference to periodically
-                                                          # check if the transaction is conmpleted
-    # start thread checking for this transaction. if completed, 
-    # deduct (amount+charges) from the hgfu account
-    
-    threading.Thread(target=withdraw_transaction_checker, 
-        args=(account_id,(amount+(charges["YO"]+charges["mobile-money"])/EXCHANGE_RATE),reference)
-    ).start()
-
-    reply["status"] = True
-    reply["reference"] = reference
-    reply["log"] = "withdraw initiated..."
-
-    return reply_to_remote(jencode(reply))
-
-@app.route("/update_exchange_rate", methods=["POST"])
-def update_exchange_rate():
-    if not client_known(request.access_route[-1]): 
-        return reply_to_remote("You are not authorised to access this server!"),401
-
-    reply = {"status":False, "log":""}
-
-    json_req = request.get_json()
-    
-    if not json_req:
-        reply["log"] = "server expects json here"
-        return reply_to_remote(jencode(reply))
-
-    er = json_req.get("rate",0) # dollar->ugx rate eg 3600
-
-    try: er = float(er)
-    except:
-        reply["log"] = "invalid rate given. expecting float or integer"
-        return reply_to_remote(jencode(reply))
-
-    EXCHANGE_RATE = er
-
-    reply["status"] = True
 
     return reply_to_remote(jencode(reply))
 
@@ -717,7 +638,7 @@ if __name__=="__main__":
     finance_server_port = 54322
     finance_server_code = "8*d08475u60-=38732nkdhwjjdwdf/-"
 
-    app.run("0.0.0.0", 54321, threaded=1, debug=1)
+    app.run("0.0.0.0", 50500, threaded=1, debug=1)
 
 else: # if imported...
     print "app being run by twistd ie;"
@@ -727,15 +648,17 @@ else: # if imported...
     libghfu.init(os.path.join(path,"lib"), os.path.join(path,"files","saves")) 
 
     if libghfu.account_id(libghfu.get_account_by_id(1))==0:
+        # create contemporary member...to act as first member in case theere are no members yet in structure
         libghfu.register_new_member(0, "PSEUDO-ROOT",
             c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
             c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value,
             file_path("pseudo-root"))
-        print "created pseudo-root account to be used"
+        print "created pseudo-root account to be used (no saved data found!)"
     else:
-        print "using loaded data..."
+        print "found saved data, using that..."
+
 
     finance_server_port = 54322
     finance_server_code = "8*d08475u60-=38732nkdhwjjdwdf/-"
 
-    app.run("0.0.0.0", 54321, threaded=1, debug=1)
+    app.run("0.0.0.0", 50500, threaded=1, debug=1)

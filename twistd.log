@@ -1,0 +1,57 @@
+2017-11-21 15:02:19+0300 [-] Log opened.
+2017-11-21 15:02:19+0300 [-] twistd 16.0.0 (/usr/bin/python 2.7.12) starting up.
+2017-11-21 15:02:19+0300 [-] reactor class: twisted.internet.epollreactor.EPollReactor.
+2017-11-21 15:02:19+0300 [-] Site starting on 8080
+2017-11-21 15:02:19+0300 [-] Starting factory <twisted.web.server.Site instance at 0x7f99ea1b4200>
+2017-11-21 15:06:37+0300 [-] Log opened.
+2017-11-21 15:06:37+0300 [-] Log opened.
+2017-11-21 15:06:37+0300 [-] twistd 16.0.0 (/usr/bin/python 2.7.12) starting up.
+2017-11-21 15:06:37+0300 [-] reactor class: twi2017-11-21 15:06:37+0300 [-] 127.0.0.1 - 2017-11-21 15:06:37+0300 [-] Traceback (most recent call last):
+2017-11-21 15:06:37+0300 [-]   File "/usr/bin/twistd", line 18, in <module>
+2017-11-21 15:06:37+0300 [-]     run()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/twistd.py", line 29, in run
+2017-11-21 15:06:37+0300 [-]     app.run(runApp, ServerOptions)
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/app.py", line 617, in run
+2017-11-21 15:06:37+0300 [-]     runApp(config)
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/twistd.py", line 25, in runApp
+2017-11-21 15:06:37+0300 [-]     _SomeApplicationRunner(config).run()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/app.py", line 352, in run
+2017-11-21 15:06:37+0300 [-]     self.postApplication()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/_twistd_unix.py", line 207, in postApplication
+2017-11-21 15:06:37+0300 [-]     self.startApplication(self.application)
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/_twistd_unix.py", line 394, in startApplication
+2017-11-21 15:06:37+0300 [-]     service.IService(application).privilegedStartService()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/service.py", line 278, in privilegedStartService
+2017-11-21 15:06:37+0300 [-]     service.privilegedStartService()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/service.py", line 278, in privilegedStartService
+2017-11-21 15:06:37+0300 [-]     service.privilegedStartService()
+2017-11-21 15:06:37+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/internet.py", line 361, in privilegedStartService
+2017-11-21 15:06:37+0300 [-]     raisedNow[0].raiseException()
+2017-11-21 15:06:37+0300 [-]   File "<string>", line 2, in raiseException
+2017-11-21 15:06:37+0300 [-] twisted.internet.error.CannotListenError: Couldn't listen on any:8080: [Errno 98] Address already in use.
+2017-11-21 15:17:26+0300 [-] Log opened.
+2017-11-21 15:17:26+0300 [-] twistd 16.0.0 (/usr/bin/python 2.7.12) starting up.
+2017-11-21 15:17:26+0300 [-] reactor class: twisted.internet.epollreactor.EPollReactor.
+2017-11-21 15:17:26+0300 [-] Traceback (most recent call last):
+2017-11-21 15:17:26+0300 [-]   File "/usr/bin/twistd", line 18, in <module>
+2017-11-21 15:17:26+0300 [-]     run()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/twistd.py", line 29, in run
+2017-11-21 15:17:26+0300 [-]     app.run(runApp, ServerOptions)
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/app.py", line 617, in run
+2017-11-21 15:17:26+0300 [-]     runApp(config)
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/twistd.py", line 25, in runApp
+2017-11-21 15:17:26+0300 [-]     _SomeApplicationRunner(config).run()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/app.py", line 352, in run
+2017-11-21 15:17:26+0300 [-]     self.postApplication()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/_twistd_unix.py", line 207, in postApplication
+2017-11-21 15:17:26+0300 [-]     self.startApplication(self.application)
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/scripts/_twistd_unix.py", line 394, in startApplication
+2017-11-21 15:17:26+0300 [-]     service.IService(application).privilegedStartService()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/service.py", line 278, in privilegedStartService
+2017-11-21 15:17:26+0300 [-]     service.privilegedStartService()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/service.py", line 278, in privilegedStartService
+2017-11-21 15:17:26+0300 [-]     service.privilegedStartService()
+2017-11-21 15:17:26+0300 [-]   File "/usr/lib/python2.7/dist-packages/twisted/application/internet.py", line 361, in privilegedStartService
+2017-11-21 15:17:26+0300 [-]     raisedNow[0].raiseException()
+2017-11-21 15:17:26+0300 [-]   File "<string>", line 2, in raiseException
+2017-11-21 15:17:26+0300 [-] twisted.internet.error.CannotListenError: Couldn't listen on any:8080: [Errno 98] Address already in use.

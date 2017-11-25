@@ -26,9 +26,60 @@ def client_known(addr):
     if addr!="127.0.0.1": return 0
     return 1
 
+@app.route("/transaction_status", methods=["POST"])
+def check_transaction_status():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote(jencode({"status":False, "log":"unknown client"}))
+
+    json_req = request.get_json()
+    if not json_req:
+        return reply_to_remote(jencode({"status":False, "log":"json data expected in request!"}))
+
+    reply = {"status":False, "log":""}
+
+    code = json_req.get("code","")
+    if (not code) or (code!=CODE):
+        reply["log"] = "you are not authorized to access this API!"
+        return reply_to_remote(jencode(reply))
+    
+    reference = str(json_req.get("reference",""))
+    
+    if (not reference) or (not isinstance(reference, str)):
+        reply["log"] = "invalid reference given"
+        return reply_to_remote(jencode(reply))
+
+    try: 
+        YO.transactions_db.close()
+        YO.db.CONFIG_DB.close()
+    except: pass
+
+    YO.db.CONFIG_DB = YO.db.Database(YO.db.dbfile)
+    YO.transactions_db = YO.db.Database(YO.os.path.join(YO.PATH, "db", YO.transactions_db_name))
+
+    try: 
+        response = YO.get_transaction_status(reference, "123")
+    except:
+        reply["log"] = "failed to reach finance system server. is it offline? if not, are we?"
+        return reply_to_remote(jencode(reply))
+
+    if response["Status"]=="Ok":
+        if response["TransactionStatus"]=="SUCCEEDED":
+            reply["status"] = True
+            reply["log"] = "transaction sucessfull"
+        else:
+            reply["log"] = "transaction still pending"
+            return reply_to_remote(jencode(reply))
+    else:
+        reply["log"] = "transaction not sucessfull"
+        return reply_to_remote(jencode(reply))
+
+
+    return reply_to_remote(jencode(reply))
+
+
 @app.route("/charges", methods=["POST"])
 def charges():
-    if not client_known:
+    if not client_known(request.access_route[-1]): 
         return reply_to_remote(jencode({"status":False, "log":"unknown client"}))
 
     json_req = request.get_json()
@@ -55,7 +106,7 @@ def charges():
 
 @app.route("/withdraw", methods=["POST"])
 def withdraw():
-    if not client_known:
+    if not client_known(request.access_route[-1]): 
         return reply_to_remote(jencode({"status":False, "log":"unknown client"}))
 
     json_req = request.get_json()
@@ -80,7 +131,7 @@ def withdraw():
     amount = json_req.get("amount",0) # this amount is independent of the charges
                                       # (those will be calculated by YO)
 
-    if (not amount) or amount<0:
+    if (not amount) or amount<0 or (not (isinstance(amount,float) or isinstance(amount,int))):
         reply["log"] = "silly amount provided!"
         return reply_to_remote(jencode(reply))  
     if amount<cfg.MINIMUM_WITHDRAW:
@@ -104,12 +155,15 @@ def withdraw():
 
     number = json_req.get("number","")
     number = YO.transform_number(number,"Uganda")
+    number = str(number)
     
     if "Error" in number:
         reply["log"] = "invalid phone number given"
         return reply_to_remote(jencode(reply))
 
-    token = json_req.get("token","{} withdrawing {}/= on <{}>".format(number,amount,time.asctime()))
+    token = json_req.get("token","")
+    if not token: token = "{} withdrawing {}/= on \"{}\"".format(number,amount,time.asctime())
+    token = str(token)
 
     try:
         _reply = YO.withdraw(number, amount, token)

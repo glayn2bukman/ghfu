@@ -247,6 +247,9 @@ bool award_commission(Account account, Amount points, String commission_type, St
 
         p_comm = (FSB[i][1]/100)*points;
 
+        fprintf(stdout,"pv=%.2f; percentage=%.2f%%; points=%.2f; comm=%.2f\n",
+            account->pv,FSB[i][1],points,p_comm);
+
         //update_pv = true;        
         
     }
@@ -509,23 +512,22 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
     pthread_mutex_unlock(&glock);
 
+    if (account->uplink!=NULL)
+    {
+        String c_reason_strings[] = {"FSB from ", account->names,"'s investment", "\0"};
+        length_of_all_strings(c_reason_strings, &buff_length);
+        char c_reason[buff_length+1];
+        join_strings(c_reason, c_reason_strings);
+        award_commission(account->uplink,points,"FSB",c_reason, fout);
+    }
+
     if(update_system_float)
     {   
-        if (account->uplink!=NULL)
-        {
-            String c_reason_strings[] = {"FSB from ", account->names,"'s investment", "\0"};
-            length_of_all_strings(c_reason_strings, &buff_length);
-            char c_reason[buff_length+1];
-            join_strings(c_reason, c_reason_strings);
-            award_commission(account->uplink,points,"FSB",c_reason, fout);
-        }
-
         pthread_mutex_lock(&glock);
 
         SYSTEM_FLOAT += amount;
 
         pthread_mutex_unlock(&glock);
-
     }
 
     increment_pv(account,points,fout);
@@ -644,17 +646,6 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         
         pthread_mutex_unlock(&glock);
         
-        if(points)
-        {
-            /* create reason for the commission and award the commission */
-            String reason_strings[] = {"FSB from adding ",names,"\0"};
-            unsigned int buff_length;
-            length_of_all_strings(reason_strings, &buff_length);
-            char buff[buff_length+1];
-            join_strings(buff,reason_strings);
-
-            award_commission(uplink, points, "FSB",buff, fout);
-        }
     }
     else {gfree(ap1); /* you dont want memory leaks, trust me */ }
 
@@ -774,8 +765,9 @@ bool purchase_property(ID IB_account_id, const Amount amount, const bool member,
     return status;
 }
 
-bool auto_refill(Account account, float percentages[][2], FILE *fout)
+bool auto_refill(Account account, FILE *fout)
 {
+    
     /* if account==NULL, calculate autp-refills for all investments in the system otherwise, 
        calculate auto-refill for only that account's investments 
     */
@@ -798,6 +790,8 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
 
     if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12,fout); return false;}
 
+    if(MONTHLY_AUTO_REFILL_PERCENTAGES==NULL){ghfu_warn(16,fout); return false;}
+        
     Commission new_commission;
     Investment inv;
     unsigned int i, buff_length;
@@ -816,14 +810,14 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
                if(inv->months_returned<12)
                {
                     i = 0;
-                    for(; percentages[i][0]; ++i)
+                    for(; MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]; ++i)
                     {
-                        if(inv->amount >= percentages[i][0]) break;
+                        if(inv->amount >= MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) break;
                     }
                     
-                    returns = (inv->amount)*(percentages[i][1])*.01;
+                    returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
 
-                    if(!percentages[i][0]) ghfu_warn(13,fout);
+                    if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = malloc(sizeof(struct commission));
@@ -849,7 +843,7 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
 
                         sprintf(returns_str," ($%.2f)",returns);
                         sprintf(points_str," worth %.2f points",inv->amount);
-                        sprintf(active_percentage_str," %.2f%%",percentages[i][1]);
+                        sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
                         String reason_strings[] = {"Investment return for package <", 
                             inv->package, "> ",points_str ,returns_str, 
                             " given at", active_percentage_str, "\0"};
@@ -863,6 +857,7 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
                         join_strings(new_commission->reason,reason_strings);
 
                         ++(inv->months_returned);
+                        inv->returns += returns;
                         account->available_balance += returns;
                         account->total_returns += returns;
                         
@@ -899,14 +894,15 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
                if(inv->months_returned<12)
                {
                     i = 0;
-                    for(; percentages[i][0]; ++i)
+                    for(; MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]; ++i)
                     {
-                        if(inv->amount >= percentages[i][0]) break;
+                        //fprintf(stdout,"pts=%.2f, ptg=%.2f%%\n",percentages[i][0],percentages[i][1]);
+                        if(inv->amount >= MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) break;
                     }
                     
-                    returns = (inv->amount)*(percentages[i][1])*.01;
+                    returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
 
-                    if(!percentages[i][0]) ghfu_warn(13,fout);
+                    if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = malloc(sizeof(struct commission));
@@ -932,7 +928,7 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
 
                         sprintf(returns_str," ($%.2f)",returns);
                         sprintf(points_str," worth %.2f points",inv->amount);
-                        sprintf(active_percentage_str," %.2f%%",percentages[i][1]);
+                        sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
                         String reason_strings[] = {"Investment return for package <", 
                             inv->package, "> ",points_str ,returns_str, 
                             " given at", active_percentage_str, "\0"};
@@ -946,6 +942,7 @@ bool auto_refill(Account account, float percentages[][2], FILE *fout)
                         join_strings(new_commission->reason,reason_strings);
 
                         ++(inv->months_returned);
+                        inv->returns += returns;
                         acc->available_balance += returns;
                         acc->total_returns += returns;
 
@@ -2055,21 +2052,21 @@ ID account_id(Account account)
     return account->id;
 }
 
-bool monthly_operations(float auto_refill_percentages[][2], FILE *fout)
+bool monthly_operations(FILE *fout)
 {
 
     /* perform all monthly operations */
     
-    bool status;
+    bool status = true;
 
-    auto_refill(NULL, auto_refill_percentages,fout) ? 1: (status=false);
-    calculate_tvc(NULL,fout) ? 1: (status=false);
-    award_rank_monthly_bonuses(NULL, fout) ? 1: (status=false);
+    auto_refill(NULL, fout) ? true: (status=false);
+    calculate_tvc(NULL,fout) ? true: (status=false);
+    award_rank_monthly_bonuses(NULL, fout) ? true: (status=false);
 
     return status;
 }
 
-bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_name)
+bool perform_monthly_operations(String fout_name)
 {
     /* python/java/etc interface to monthly_operations */
 
@@ -2078,16 +2075,14 @@ bool perform_monthly_operations(float auto_refill_percentages[][2], String fout_
     FILE *fout = fopen(fout_name, "w"); fclose(fout);
     fout = fopen(fout_name, "a");
     
-    if(auto_refill_percentages==NULL && MONTHLY_AUTO_REFILL_PERCENTAGES==NULL)
+    if(MONTHLY_AUTO_REFILL_PERCENTAGES==NULL)
     {
         fprintf(fout, "no percentages given and the defaults are still not set!\n");
         fclose(fout);
         return status;
     }
-    if(auto_refill_percentages!=NULL) /* use given %ges but dont update the defaults */
-        status = monthly_operations(auto_refill_percentages, fout);
-    else
-        status = monthly_operations(MONTHLY_AUTO_REFILL_PERCENTAGES, fout);
+
+    status = monthly_operations(fout);
     
     fclose(fout);
 

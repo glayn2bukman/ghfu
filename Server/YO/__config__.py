@@ -67,6 +67,12 @@ except:
 #------------------------------------------------------------------
 
 YO = {
+    # API sandbox details
+    'sandbox-uname':'bukman',
+    'sandbox-pswd':'aA1glayn2bukman',
+    'sandbox-api-uname':'90000911662',
+    'sandbox-api-pswd':'1256009521',
+    
     # API uname and password
     'uname':'100481771305',
     'pswd':'i5nU-rfWr-V7Ip-dEE0-XsAW-Zrra-bbSN-xa4x',
@@ -78,7 +84,7 @@ YO = {
     # API communication urls
     'urls':[
             'https://paymentsapi1.yo.co.ug/ybs/task.php',
-            'https://paymentsapi2.yo.co.ug/ybs/task2.php',
+            'https://paymentsapi2.yo.co.ug/ybs/task.php',
            ],
 
     # ***********************
