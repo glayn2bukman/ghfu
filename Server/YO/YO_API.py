@@ -167,7 +167,12 @@ def send_request(template, **kwargs):
 
     for index, url in enumerate(urls):
         print "Sending request to <{}> ...".format(url)
-        reply = requests.post(urls[0], data=template, headers=get_data("headers"))
+        
+        reply = requests.post(url, data=template, headers=get_data("headers"))
+        #try:reply = requests.post(url, data=template, headers=get_data("headers"))
+        #except:
+        #    # using the sandbox whose certificate aint known! 
+        #    reply = requests.post(url, data=template, headers=get_data("headers"), verify=False)
         if reply.status_code==200:
             print "\bRequest sent"
             break
@@ -217,6 +222,10 @@ def withdraw(number, amount, narrative):
     """
     Withdraw funds from Yo! account
     """
+    
+    number = transform_number(number, "Uganda")
+    if "Error" in number:
+        return {'Status':'ERROR', 'StatusMessage':number}
 
     request = send_request("withdraw", mtd="withdraw", uname=get_data("general")["uname"], password=get_data("general")["pswd"], 
                             amount=amount, number=number, narrative=narrative)
@@ -225,10 +234,37 @@ def withdraw(number, amount, narrative):
 #.    
 #print withdraw("0783573700", 500,  "my withdraw...")
 
-def deposit(amount):
+def deposit(amount, number, mobile_money_type='mtn-mobile-money', narrative="transfter funds"):
     """
     Deposit funds to YO! account
+    
+    amount: money to transfer
+    number: mobile-number going to send mobile-money
+    mobile_money_type: mtn-mobile-money/airtel-money
+        mtn-mobile-money is used coz i used the pull method of depositing and this doesn't support
+        airtel as yet (the pull method is easier for the client sending us mobile money)
     """
+
+    number = transform_number(number, "Uganda")
+    if "Error" in number:
+        return {'Status':'ERROR', 'StatusMessage':number}
+
+    try: amount = int(amount)
+    except:
+        return {'Status':'ERROR', 'StatusMessage':'silly amount provided'}
+
+    _APCs = get_data("account_provider_codes")
+
+    request = send_request("deposit", 
+        mtd="deposit", 
+        uname=get_data("general")["uname"], password=get_data("general")["pswd"], 
+        amount=amount, number=number, narrative=narrative, non_blocking="TRUE",
+        account_provider_code=_APCs.get(mobile_money_type,'MTN_UGANDA')
+        )
+
+    return request
+
+# print deposit(5600,"0783573700")
 
 def transfer(amount, to, to_email, narrative="Funds Transfer", currency="mtn-mobile-money", validate_currency=False):
     """

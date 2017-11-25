@@ -68,11 +68,16 @@ except:
 
 YO = {
     # API sandbox details
-    'sandbox-uname':'bukman',
-    'sandbox-pswd':'aA1glayn2bukman',
-    'sandbox-api-uname':'90000911662',
-    'sandbox-api-pswd':'1256009521',
-    
+    'sandbox':{
+        'sandbox-uname':'bukman',
+        'sandbox-pswd':'aA1glayn2bukman',
+        
+        'sandbox-api-uname':'90000911662',
+        'sandbox-api-pswd':'1256009521',
+
+        'url':'https://41.220.12.206/services/yopaymentsdev/task.php'
+    },
+
     # API uname and password
     'uname':'100481771305',
     'pswd':'i5nU-rfWr-V7Ip-dEE0-XsAW-Zrra-bbSN-xa4x',
@@ -97,12 +102,18 @@ YO = {
         'balance':'acacctbalance',
         'mini_statement':'acgetministatement',
         'airtime':'acsendairtimemobile',
+        'deposit':'acdepositfunds',
     },
 
     'currencies':{ # supported YO! currencies
         'mtn-airtime': 'UGX-MTNAT',
         'mtn-mobile-money': 'UGX-MTNMM',
         'airtel-airtime': 'UGX-AIRAT'
+    },
+
+    'account-provider-codes':{ # mobile money codes
+        'mtn-mobile-money':'MTN_UGANDA',
+        'airtel-money':'AIRTEL_UGANDA'
     },
 
     'headers':{
@@ -151,14 +162,21 @@ YO = {
             <APIUsername>{}</APIUsername>
             <APIPassword>{}</APIPassword>
             <Method>{}</Method>
-
-            ...
-
+            <NonBlocking>{}</NonBlocking>
+            <Amount>{}</Amount>
+            <Account>{}</Account>
+            <AccountProviderCode>{}</AccountProviderCode>
+            <Narrative>{}</Narrative>
         </Request>
     </AutoCreate>
     ''', 
         [
-            ('uname',1), ('password',1), ('mtd',1), 
+            ('uname',1), ('password',1), ('mtd',1), ('non_blocking',1), ('amount',1),
+            ('number',1), ('account_provider_code',1), ('narrative',1), 
+            ('narrative_file_name',0),
+            ('narrative_file_base64',0), ('internal_reference',0), ('external_reference', 0),
+            ('provider_reference_text',0), ('instant_notification_url',0),
+            ('failure_notification_url',0), ('authentication_signature_base64',0)
         ]
        ),
 

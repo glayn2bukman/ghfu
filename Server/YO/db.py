@@ -316,6 +316,9 @@ def get_data(field):
     elif field=="currencies":
         data = {curr[0]:curr[1] for curr in CONFIG_DB.get_all(table="YO_currencies")}
 
+    elif field=="account_provider_codes":
+        data = {apc[0]:apc[1] for apc in CONFIG_DB.get_all(table="YO_account_provider_codes")}
+
     elif field=="headers":
         data = {header[0]:header[1] for header in CONFIG_DB.get_all(table="YO_headers")}
 
@@ -413,6 +416,10 @@ for _duration_ in cfg.DATA_BUNDLES:
             
         "YO_currencies":[(("currency", "text"), ("yo_currency", "text")),
             """for data in [(k, cfg.YO["currencies"][k]) for k in cfg.YO["currencies"]]: CONFIG_DB.add(data, table="YO_currencies")"""],
+
+        "YO_account_provider_codes":[(("service", "text"), ("code", "text")),
+            """for data in [(k, cfg.YO["account-provider-codes"][k]) for k in cfg.YO["account-provider-codes"]]: CONFIG_DB.add(data, table="YO_account_provider_codes")"""],
+
             
         "YO_headers":[(("header", "text"), ("value", "text")),
             """for data in [(k, cfg.YO["headers"][k]) for k in cfg.YO["headers"]]: CONFIG_DB.add(data, table="YO_headers")"""],
