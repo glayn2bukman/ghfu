@@ -611,6 +611,11 @@ def withdraw():
 
     return reply_to_remote(jencode(reply))
 
+@app.route("/dummy",methods=["POST","GET"])
+def dummy():
+    print request.args
+    return reply_to_remote("Ok")
+
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
     libghfu.init(os.path.join(path,"lib"), os.path.join(path,"files","saves")) 

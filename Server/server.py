@@ -44,6 +44,11 @@ from flask import Flask, request, Response
 import os, sys, json, threading, time
 import requests
 
+try:
+    with open("/var/lib/ghfu/.finance_code","r") as finance_code_file:
+        finance_server_code = finance_code_file.read().strip()
+except: sys.exit("cant find finance server code file (/var/lib/ghfu/.finance_code)")
+
 from ctypes import *
 
 path = os.path.realpath(__file__)
@@ -100,7 +105,7 @@ def info(fname):
             return f.read()
     except:
         return "failed to access json file. is account signed in multiple times"
-        
+
 # define a function that wil allow responses to be sent to pages not served by this server
 def reply_to_remote(reply):
     response = Response(reply)
@@ -149,7 +154,7 @@ def test():
 
     if not client_known(request.access_route[-1]): 
         return reply_to_remote("You are not authorised to access this server!"),401
-    reply = {"status":"Server is up!"}
+    reply = {"status":"GHFU server is up!"}
     
     return reply_to_remote(jencode(reply))
     
@@ -678,6 +683,7 @@ def update_exchange_rate():
 
     return reply_to_remote(jencode(reply))
 
+
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
     libghfu.init(os.path.join(path,"lib"), os.path.join(path,"files","saves")) 
@@ -703,27 +709,6 @@ if __name__=="__main__":
     #app.run("0.0.0.0", 54321, threaded=1, debug=1, ssl_context=('cert.pem', 'key.pem'))
 
     finance_server_port = 54322
-    finance_server_code = "8*d08475u60-=38732nkdhwjjdwdf/-"
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)
 
-else: # if imported...
-    print "app being run by twistd ie;"
-    print "twistd web --wsgi Server.server"
-    print
-
-    libghfu.init(os.path.join(path,"lib"), os.path.join(path,"files","saves")) 
-
-    if libghfu.account_id(libghfu.get_account_by_id(1))==0:
-        libghfu.register_new_member(0, "PSEUDO-ROOT",
-            c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
-            c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value,
-            file_path("pseudo-root"))
-        print "created pseudo-root account to be used"
-    else:
-        print "using loaded data..."
-
-    finance_server_port = 54322
-    finance_server_code = "8*d08475u60-=38732nkdhwjjdwdf/-"
-
-    app.run("0.0.0.0", 54321, threaded=1, debug=1)
