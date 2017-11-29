@@ -107,12 +107,12 @@ float RANK_DETAILS[][4] = {
 
 /* commission/bonus ranges (all amounts in points NOT $)*/
 
-float IBC[][2] = { /* independent-brocker=commissions */
+float IBC[][2] = { /* independent-brocker-commissions/discounts */
     /* array-values are in format {PV+, %discount/commission} */
-    {0, 35},
-    {120, 40},
-    {200, 45},
-    {350, 50},
+    {0, 5},
+    {120, 10},
+    {200, 10},
+    {350, 10},
     {0, 0} /* terminating condition */
 };
 

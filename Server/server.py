@@ -41,18 +41,21 @@
 # ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
-import os, sys, json, threading, time
+import os, sys, json, threading, time, random
 import requests
-
-try:
-    with open("/var/lib/ghfu/.finance_code","r") as finance_code_file:
-        finance_server_code = finance_code_file.read().strip()
-except: sys.exit("cant find finance server code file (/var/lib/ghfu/.finance_code)")
-
-from ctypes import *
 
 path = os.path.realpath(__file__)
 path = os.path.split(os.path.split(path)[0])[0]
+
+data_path = "/var/lib/ghfu"
+
+try:
+    with open(os.path.join(data_path,".finance_code"),"r") as finance_code_file:
+        finance_server_code = finance_code_file.read().strip()
+except: sys.exit("cant find finance server code file ({})".format(os.path.join(data_path,".finance_code")))
+
+from ctypes import *
+
 
 libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 
@@ -76,6 +79,12 @@ libghfu.account_id.restype = c_long
 #   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
 #      condition in libghfu
 
+server_log_file_path = os.path.join(path,"Server","log")
+server_log_file = open(server_log_file_path,"a")
+
+def server_log(_log):
+    server_log_file.write("\n{}: {}".format(time.asctime(), _log))
+
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
@@ -86,8 +95,21 @@ jdecode = json.JSONDecoder().decode
 #mutex = threading.Lock()
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
-EXCHANGE_RATE=3500
+
+EXCHANGE_RATE=3600 # deposit rate is always 100/= more DICUSS THIS WITH THE GHFU ADMINS. withdraw value
+                   # is always 50/= less
+                   # also, this value can be modified anytime using uri </update_exchange_rate> but once
+                   # every half-day, the server will first attempt to collect the latest value at
+                   # <http://usd.fxexchangerate.com/ugx/> and in case it fails, then the manually set
+                   # value will be used!
+
 TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
+JPESA_DEPOSIT_CHARGES = .03
+
+CODES = {} # every time a random code is generated, its stored here to hold transaction data
+           # so when the client wants to know about the state of a transaction, they i dont querry the 
+           # jpesa api but rather, i cnosult with this dictionary and return whatever the latest status
+           # of the transaction is kept here
 
 # remove used uncessesary file
 def rm(f):
@@ -114,39 +136,134 @@ def reply_to_remote(reply):
 
 # define scanning function (we ony wanna accept requests from known clients)
 def client_known(addr):
-    if not(os.path.isfile(os.path.join(path,"Server","known_clients"))):
-        with open(os.path.join(path,"Server","known_clients"), "w") as f: f.write(known_clients)
-    with open(os.path.join(path,"Server","known_clients"), "r") as f:
+    if not(os.path.isfile(os.path.join(data_path,".known_clients"))):
+        with open(os.path.join(data_path,".known_clients"), "w") as f: f.write(known_clients)
+    with open(os.path.join(data_path,".known_clients"), "r") as f:
         known = [c.strip() for c in f.read().strip().split("\n")]
         for client in known:
             if addr==client: return True
     return False
 
-# define function to keep checking on transaction statuses and effect changes to ghfu if the transaction is 
-# verified
-def withdraw_transaction_checker(account_id, amount, reference):
+# define function to auto-update the exchange rate every half-day
+def fetch_current_exchange_rate():
+    global EXCHANGE_RATE
+    exchange_rate_url = "http://usd.fxexchangerate.com/ugx/"
+    
     while 1:
+        try:
+            data = requests.get(exchange_rate_url).text
+            try:
+                i = data.index(" UGX")
+                if i!=13956:
+                    server_log("the index of \" UGX\" in the exchange-rates \
+url aint where we expected it to be,\
+none-the-less, continuing with the operation")
+                
+                value = data[i-5:i] # very likely that (1,000 <= USD <= 10,000)
+                try:
+                    value = int(value)
+                except:
+                    server_log("the exchange-rates site must have changed configuration, \
+no data could be read using our algorithm")
+                                
+                if value<1000: # very likely that (1,000 <= USD <= 10,000)
+                    server_log("got <{}> as the exchange-rate value from the exchange-rates url.\
+however, this value just is suspicious and we aint gonna use it!".format(value))
+                else:
+                    EXCHANGE_RATE = value
+                    
+            except:
+                server_log("is the exchange-rates url right? cnt find the index of \" UGX\" in it")
+        except: 
+            server_log("the exchange-rates url <{}> was moved".format(exchange_rate_url))
+        
+        time.sleep(12*60*60)
 
+# define function to keep checking on transaction deposit statuses and effect changes to ghfu if the 
+# transaction(deposit/withdraw) is verified. if so, the necesary update to GHFU is effected
+def effect_transaction(code, reference, func=None, args=None, logfile=None):
+    "amount is in dollars ie the amount to feed to jermlibghfu.so"
+    
+    while 1:
         try:
             reply = requests.post("http://0.0.0.0:{}/transaction_status".format(finance_server_port), 
-                json={"code":finance_server_code, "reference":reference}).text
+                json={"code":finance_server_code, "ref":reference}).text
             reply = jdecode(reply)
-        except: # YO server is down for some reason...
+            if not reply["status"]:
+                CODES[code]["status"] = False
+                CODES[code]["actionlog"] = "Operation bounced."
+                break
+        except: # finance server is down for some reason...
+            server_log("the finance server is down. look into this ASAP!")
             time.sleep(TRANSACTION_CHECK_DELAY)
             continue
         
-        if reply["status"]:
-            logfile = file_path("{}.withdraw".format(account_id))
-            libghfu.redeem_account_points(account_id, amount, logfile)
+        if reply["status"] and reply["details"]["status"]=="complete":
+            if not logfile:
+                logfile = file_path("{}.transaction".format(code))
+
+            func(*args)
             
             if info(logfile): 
-                print "error in wihdrawing money fron account <{}>".format(account_id)
-                print logfile
-                        
+                CODES[code]["status"] = False
+                CODES[code]["actionlog"] = info(logfile)
+            else:
+                CODES[code]["status"] = True
+                CODES[code]["details"] = reply
+                CODES[code]["actionlog"] = ""
+                                        
             rm(logfile)
+            
             break
         
         time.sleep(TRANSACTION_CHECK_DELAY)
+
+# function to initialte deposit trancaction to jpesa
+def depost_funds_to_jpesa(internal_code, number, amount, func, args):
+    """
+    this function should be brached off from the callee ie threaded
+
+    typically, we call the function in the following steps;
+
+    ``
+    new_internal_code = get_random_code()
+    CODES[new_internal_code] = {"status":False, "actionlog":"pending"}
+    
+    threading.Thread(target=depost_funds_to_jpesa, args=(new_internal_code,"0701173049", 500)).start()
+    
+    reply["status"] = True
+    reply["code"] = new_internal_code
+    ``
+
+    """
+    try:
+        reply = requests.post("http://0.0.0.0:{}/deposit".format(finance_server_port), 
+                json={"code":finance_server_code, "number":number, "amount":amount}).text
+        reply = jdecode(reply)
+        if not reply["status"]:
+            CODES[code]["status"] = False
+            CODES[code]["actionlog"] = "An error occured in the financial server..."
+        else:
+            effect_transaction(internal_code,reply["ref"],func, args)
+    except:
+        CODES[internal_code]["status"] = False
+        CODES[internal_code]["actionlog"] = "Failed to reach finance server"
+
+
+# function to generate rado codes
+def get_random_code():
+    "generate and return a random code 8 xters long"
+    t = str(time.time())
+    t = t[t.index(".")+1:]
+    
+    if len(t)>=8:
+        t = t[:8]
+        return t
+    
+    for i in range(8-len(t)):
+        t += str(random.randint(0,9))
+
+    return t
 
 
 @app.route("/test",methods=["GET","POST"])
@@ -568,94 +685,12 @@ def perform_monthly_operations():
 
     return reply_to_remote(jencode({"status":False, "log":log}))
 
-
-@app.route("/withdraw", methods=["POST"])
-def withdraw():
-    """
-    attempt a withdraw of funds from the ghfu account. the amount to be withdrawn is in dollars NOT UGX
-    """
+@app.route("/get_exchange_rate", methods=["POST"])
+def get_current_exchange_rate():
     if not client_known(request.access_route[-1]): 
         return reply_to_remote("You are not authorised to access this server!"),401
 
-    reply = {"status":False, "log":""}
-
-    json_req = request.get_json()
-    
-    if not json_req:
-        reply["log"] = "server expects json here"
-        return reply_to_remote(jencode(reply))
-
-    account_id = json_req.get("id",0)
-    number = json_req.get("number","")
-    amount = json_req.get("amount",0) # amount is in dollars!
-    token = json_req.get("token","")
-
-    if(not account_id) or (not(isinstance(account_id,int))):
-        reply["log"] = "silly account ID provided"
-        return reply_to_remote(jencode(reply))
-    if(not amount) or (not(isinstance(amount,int) or isinstance(amount,float))):
-        reply["log"] = "silly amount provided"
-        return reply_to_remote(jencode(reply))
-
-    jsonfile = os.path.join(path, "files","json","{}.withdraw.json".format(account_id))
-        
-    if libghfu.dump_structure_details(account_id, jsonfile):
-        try:
-            with open(jsonfile, "r") as f: 
-                account_data = f.read()
-                account_data = jdecode(account_data)
-            rm(jsonfile)
-        except:
-            reply["log"] = "failed to access json file. is account signed in multiple times"
-            return reply_to_remote(jencode(reply))
-    else:
-        reply["log"] = "no account matching requested target!"
-        return reply_to_remote(jencode(reply))
-    
-    try:
-        charges = requests.post("http://0.0.0.0:{}/charges".format(finance_server_port), 
-            json={"code":finance_server_code, "type":"withdraw"}).text
-        charges = jdecode(charges)
-    except:
-        reply["log"] = "failed to reach local financing server"
-        return reply_to_remote(jencode(reply))
-    
-    if "status" in charges:
-        return reply_to_remote(jencode(charges))
-        
-    if EXCHANGE_RATE*account_data["available_balance"]<(
-        (EXCHANGE_RATE*amount)+charges["YO"]+charges["mobile-money"]):
-        reply["log"] = "you have insufficient balance on your account (${})".format(
-            account_data["available_balance"]
-        )
-        return reply_to_remote(jencode(reply))
-
-    try:
-        _reply = requests.post("http://0.0.0.0:{}/withdraw".format(finance_server_port), 
-            json={"amount":(EXCHANGE_RATE*amount), "token":token, "number":number, "code":finance_server_code}).text
-        _reply = jdecode(_reply)
-    except:
-        reply["log"] = "failed to reach local financing server"
-        return reply_to_remote(jencode(reply))
-
-    if not _reply["status"]:
-        reply["log"]="could not process payment, please inform admin about this ASAP!"
-        return reply_to_remote(jencode(reply))
-    
-    reference = _reply["details"]["TransactionReference"] # use this reference to periodically
-                                                          # check if the transaction is conmpleted
-    # start thread checking for this transaction. if completed, 
-    # deduct (amount+charges) from the hgfu account
-    
-    threading.Thread(target=withdraw_transaction_checker, 
-        args=(account_id,(amount+(charges["YO"]+charges["mobile-money"])/EXCHANGE_RATE),reference)
-    ).start()
-
-    reply["status"] = True
-    reply["reference"] = reference
-    reply["log"] = "withdraw initiated..."
-
-    return reply_to_remote(jencode(reply))
+    return reply_to_remote(jencode({"value":EXCHANGE_RATE}))
 
 @app.route("/update_exchange_rate", methods=["POST"])
 def update_exchange_rate():
@@ -682,7 +717,7 @@ def update_exchange_rate():
     reply["status"] = True
 
     return reply_to_remote(jencode(reply))
-
+        
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
@@ -709,6 +744,9 @@ if __name__=="__main__":
     #app.run("0.0.0.0", 54321, threaded=1, debug=1, ssl_context=('cert.pem', 'key.pem'))
 
     finance_server_port = 54322
+
+    # start thread that monitors the exchange rate...
+    threading.Thread(target=fetch_current_exchange_rate, args=()).start()
 
     app.run("0.0.0.0", 54321, threaded=1, debug=1)
 

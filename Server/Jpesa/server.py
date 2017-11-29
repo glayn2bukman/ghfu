@@ -29,25 +29,27 @@
 
 """
 
-import sys, requests, time, json, json
+import sys, requests, json, json, os
 
 jencode = json.JSONEncoder().encode
 jdecode = json.JSONDecoder().decode
 
+data_path = "/var/lib/ghfu"
+
 try:
-    with open("/var/lib/ghfu/.jpesa","r") as jpesa_cfg:
+    with open(os.path.join(data_path,".jpesa"),"r") as jpesa_cfg:
         data = jpesa_cfg.read().strip()
         if not (";") in data:
             sys.exit("jpesa file corrupted...")
         separator_index = data.index(";")
         jpesa_uname, jpesa_pswd = data[:separator_index], data[separator_index+1:]
 except:
-    sys.exit("could not find jpesa configuration file (/var/lib/ghfu/.jpesa)...")
+    sys.exit("could not find jpesa configuration file ({})...".format(os.path.join(data_path,".jpesa")))
 
 try:
-    with open("/var/lib/ghfu/.finance_code","r") as finance_code_file:
+    with open(os.path.join(data_path,".finance_code"),"r") as finance_code_file:
         finance_server_code = finance_code_file.read().strip()
-except: sys.exit("cant find finance server code file (/var/lib/ghfu/.finance_code)")
+except: sys.exit("cant find finance server code file ({})".format(os.path.join(data_path,".finance_code")))
 
 jpesa_url = "https://secure.jpesa.com/api.php"
 
@@ -76,7 +78,7 @@ def deposit(number, amount, code):
     
     amount = int(amount)
     
-    if amount<1000 or amount>4950000:
+    if amount<500 or amount>4950000:
         reply["log"] = "amount must be in the range SHS 1,000-4,950,000"
         return reply
     

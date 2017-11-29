@@ -1,6 +1,18 @@
 /* export this file as a library with
     $ gcc -shared -fPIC -o libjermGHFU.so ghfu.c
 
+    NB: through-out this code, the only time output is written to a file (maybe stdout but nt likely) is
+        is when an error occured somewhere. in fact, this and the fact that most functions return 
+        true/false is what the other programs interacting with this code use to tell if something went 
+        wrong. ie;
+
+            function_reply = libjermGHFU->(void *)func(..., output_logfile)
+            if not function_reply:
+                error = output_logfile.contents
+
+        the only exception to this rule is function <dump_structure_details> as the sole purpose of this
+        function is to actually write the structure details to a json file!
+
 */
 
 #include "ghfu.h"
@@ -426,6 +438,10 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     //printf("I-Money\n");
 
     if(account==NULL) {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
+
+    // nelson insisted that one can not make more than 1 investments in a year!
+    if (account->investments!=NULL && account->last_investment->months_returned!=12)
+        {fprintf(fout, "cant make more than one investment in 12 months"); return false;}
 
     amount -= OPERATIONS_FEE;
     

@@ -1,11 +1,12 @@
 import requests
 
 url = "https://secure.jpesa.com/api.php"
-test_uname = "glayn2bukman@gmail.com"
-test_pswd = "saltySALTY123*"
+test_uname = "********"
+test_pswd = "*********"
 
 def deposit(number, amount):
     "deposit money from mobile money number to jpesa account"
+    
     try:
         print requests.post(url,
             data = {
@@ -14,7 +15,7 @@ def deposit(number, amount):
                 "username":test_uname,
                 "password":test_pswd,
                 "number":str(number),
-                "amount":int(amount)
+                "amount":int(amount),
                 }
         ).text
     except:
@@ -35,8 +36,8 @@ def check_transaction(ref):
     except:
         print "network or url down!"
 
-# deposit("0701173049",5000)
-# check_transaction("6598863FBA4747BFA647676370AD8780")
+#deposit("0752567374",500)
+check_transaction("0B557AD6334B8A2D075741D1CE055D17")
 
 # references: 
 #   airtel:6598863FBA4747BFA647676370AD8780
