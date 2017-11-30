@@ -130,9 +130,9 @@ float INVESTMEN_SCHEME[][3] = {
     /* array-values are in format {points+, %lowest, %highest} 
        the data is in descending investment-points order
     */
-    {375, 40, 80},
-    {250, 40, 70},
-    {125, 40, 65},
+    {175, 40, 90},
+    {125, 40, 87},
+    {75, 40, 85},
     {0, 0, 0} /* terminating condition */
 };
 

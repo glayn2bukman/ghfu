@@ -95,8 +95,8 @@ jdecode = json.JSONDecoder().decode
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
-EXCHANGE_RATE=3600 # deposit rate is always 100/= more DICUSS THIS WITH THE GHFU ADMINS. withdraw value
-                   # is always 50/= less
+RATE_INFLATE = 50
+EXCHANGE_RATE=3600 # deposit rate is always 50/= more while withdraw value is always 50/= less
                    # also, this value can be modified anytime using uri </update_exchange_rate> but once
                    # every half-day, the server will first attempt to collect the latest value at
                    # <http://usd.fxexchangerate.com/ugx/> and in case it fails, then the manually set
@@ -180,7 +180,7 @@ however, this value just is suspicious and we aint gonna use it!".format(value))
 
 # define function to keep checking on transaction deposit statuses and effect changes to ghfu if the 
 # transaction(deposit/withdraw) is verified. if so, the necesary update to GHFU is effected
-def effect_transaction(code, reference, func=None, args=None, logfile=None):
+def effect_transaction(code, reference, func=None, args=None, logfile=None, update_structure=True):
     "amount is in dollars ie the amount to feed to jermlibghfu.so"
     
     while 1:
@@ -190,7 +190,8 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None):
             reply = jdecode(reply)
             if not reply["status"]:
                 CODES[code]["status"] = False
-                CODES[code]["actionlog"] = "Operation bounced."
+                CODES[code]["actionlog"] = "Operation bounced by client."
+                CODES[code]["delete"] = True
                 break
         except: # finance server is down for some reason...
             server_log("the finance server is down. look into this ASAP!")
@@ -201,7 +202,10 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None):
             if not logfile:
                 logfile = file_path("{}.transaction".format(code))
 
-            func(*args)
+            func_reply = func(*args)
+
+            if func==libghfu.register_new_member:
+                CODES[code]["id"] = func_reply
             
             if info(logfile): 
                 CODES[code]["status"] = False
@@ -210,7 +214,13 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None):
                 CODES[code]["status"] = True
                 CODES[code]["details"] = reply
                 CODES[code]["actionlog"] = ""
-                                        
+                if update_structure:
+                    threading.Thread(target=libghfu.save_structure, args=(
+                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
+                        )).start()
+
+            CODES[code]["delete"] = True
+                                    
             rm(logfile)
             
             break
@@ -218,7 +228,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None):
         time.sleep(TRANSACTION_CHECK_DELAY)
 
 # function to initialte deposit trancaction to jpesa
-def depost_funds_to_jpesa(internal_code, number, amount, func, args):
+def depost_funds_to_jpesa(internal_code, number, amount, func, args, logfile=None, update_structure=True):
     """
     this function should be brached off from the callee ie threaded
 
@@ -226,9 +236,11 @@ def depost_funds_to_jpesa(internal_code, number, amount, func, args):
 
     ``
     new_internal_code = get_random_code()
-    CODES[new_internal_code] = {"status":False, "actionlog":"pending"}
+    CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
     
-    threading.Thread(target=depost_funds_to_jpesa, args=(new_internal_code,"0701173049", 500)).start()
+    threading.Thread(target=depost_funds_to_jpesa, 
+        args=(new_internal_code,"0701173049", 500, func,args),
+        kwargs={"logfile":logfile, "update_structure":update_structure}).start()
     
     reply["status"] = True
     reply["code"] = new_internal_code
@@ -242,8 +254,9 @@ def depost_funds_to_jpesa(internal_code, number, amount, func, args):
         if not reply["status"]:
             CODES[code]["status"] = False
             CODES[code]["actionlog"] = "An error occured in the financial server..."
+            CODES[code]["delete"] = True
         else:
-            effect_transaction(internal_code,reply["ref"],func, args)
+            effect_transaction(internal_code,reply["ref"],func, args, logfile, update_structure)
     except:
         CODES[internal_code]["status"] = False
         CODES[internal_code]["actionlog"] = "Failed to reach finance server"
@@ -293,11 +306,13 @@ def register():
         uplink_id = json_req.get("uplink",-1)
         names = str(json_req.get("names",-1))
         deposit = json_req.get("deposit",-1)
+        number = str(json_req.get("number", ""))
 
     else:
         uplink_id = request.form.get("uplink",-1)
         names = request.form.get("names",-1)
         deposit = request.form.get("deposit",-1) 
+        number = str(request.form.get("number", ""))
 
         try:
             uplink_id = int(uplink_id)
@@ -315,6 +330,9 @@ def register():
     if (deposit<0 or isinstance(deposit,unicode) or (not (type(deposit)!=type(0) or type(deposit)!=type(0.0)))):
         reply["log"] = "silly data provided; parameter <deposit>"
         return reply_to_remote(jencode(reply))
+    if not number:
+        reply["log"] = "silly data provided; parameter <number>"
+        return reply_to_remote(jencode(reply))
     
     # allow creating accounts with ROOT uplinks? i doubt 
     if uplink_id==0:
@@ -323,17 +341,17 @@ def register():
     else:
         logfile = file_path("{}{}{}.reg".format(uplink_id,names,deposit))
 
-        account_id = libghfu.register_new_member(uplink_id, names, deposit, logfile)
-        if account_id: 
-            reply["id"]=account_id
-
-            threading.Thread(target=libghfu.save_structure, args=(
-                os.path.join(path,"lib"), os.path.join(path,"files","saves")
-                )).start()
-        else: 
-            reply["log"] = info(logfile)
-    
-        rm(logfile)
+        new_internal_code = get_random_code()
+        CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+        
+        threading.Thread(target=depost_funds_to_jpesa, 
+            args=(new_internal_code,number, deposit*(EXCHANGE_RATE+RATE_INFLATE), 
+                libghfu.register_new_member,
+            (uplink_id, names, deposit, logfile)),
+            kwargs={"logfile":logfile, "update_structure":True}).start()
+        
+        reply["status"] = True
+        reply["code"] = new_internal_code
         
     return reply_to_remote(jencode(reply))
 
@@ -522,10 +540,12 @@ def invest():
     if json_req:
         account_id = json_req.get("id", -1)
         amount = json_req.get("amount", -1)
+        number = str(json_req.get("number", ""))
 
     else:
         account_id = request.form.get("id",-1)
         amount = request.form.get("amount", -1)
+        number = str(request.form.get("number", ""))
 
         try:
             account_id = int(account_id)
@@ -540,20 +560,23 @@ def invest():
     if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
+    if not number:
+        reply["log"] = "silly datahttps://limonte.github.io/sweetalert2/ provided; parameter <number>"
+        return reply_to_remote(jencode(reply))
 
 
     logfile = file_path("{}{}.inv".format(account_id,amount))
 
-    if libghfu.invest(account_id, amount, 1, logfile):
-        reply["status"]=True
-
-        threading.Thread(target=libghfu.save_structure, args=(
-            os.path.join(path,"lib"), os.path.join(path,"files","saves")
-            )).start()
-    else:
-        reply["log"] = info(logfile)
-
-    rm(logfile)
+    new_internal_code = get_random_code()
+    CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+    
+    threading.Thread(target=depost_funds_to_jpesa, 
+        args=(new_internal_code,number, amount*(EXCHANGE_RATE+RATE_INFLATE), 
+            libghfu.invest,(account_id, amount, 1, logfile)),
+        kwargs={"logfile":logfile, "update_structure":True}).start()
+    
+    reply["status"] = True
+    reply["code"] = new_internal_code
 
     return reply_to_remote(jencode(reply))
 
@@ -705,6 +728,48 @@ def update_exchange_rate():
 
     return reply_to_remote(jencode(reply))
         
+
+@app.route("/transaction_status", methods=["POST"])
+def check_transaction_status():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "server expects json here"
+        return reply_to_remote(jencode(reply))
+
+    code = json_req.get("code","")
+    
+    code = str(code)
+    
+    if not code:
+        reply["log"] = "silly reqest given, expected a code"
+        return reply_to_remote(jencode(reply))
+
+    transaction_data = CODES.get(code,None)
+    
+    if not transaction_data:
+        reply["log"] = "your code is not in the system"
+        return reply_to_remote(jencode(reply))
+
+    if "id" in transaction_data: # url /register
+        reply["id"] = transaction_data["id"]
+
+    if not transaction_data["status"]:
+        reply["log"] = transaction_data["actionlog"]
+    else:
+        reply["status"]=True
+        reply["new-code"] = transaction_data["details"]["details"]["tid"][:8]
+
+    if transaction_data["delete"]:
+        del(CODES[code])
+
+    return reply_to_remote(jencode(reply))
+
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
