@@ -26,8 +26,7 @@
 #   bool dump_structure_details(ID account_id, String fout_name); 
 #   Account get_account_by_id(const ID id);
 #   ID account_id(Account account);
-#   bool invest(ID account_id, const Amount amount, const String package, 
-#        const ID package_id, const bool update_system_float, String fout_name);
+#   bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name);
 #   void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
 #   void purchase_property(ID IB_account_id, const Amount amount, const bool member, 
 #        const String buyer_names, String fout_name);
@@ -60,7 +59,7 @@ from ctypes import *
 libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 
 # define libghfu function argtypes (so that we can call them normally and let ctypes do any type conversions)
-libghfu.invest.argtypes = [c_long, c_float, c_char_p, c_long, c_int, c_char_p]
+libghfu.invest.argtypes = [c_long, c_float, c_int, c_char_p]
 libghfu.dump_structure_details.argtype = [c_long, c_char_p]
 libghfu.get_account_by_id.argtypes = [c_long]
 #libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
@@ -523,19 +522,14 @@ def invest():
     if json_req:
         account_id = json_req.get("id", -1)
         amount = json_req.get("amount", -1)
-        package = str(json_req.get("package", ""))
-        package_id = json_req.get("package_id", -1)
 
     else:
         account_id = request.form.get("id",-1)
         amount = request.form.get("amount", -1)
-        package = request.form.get("package", "")
-        package_id = request.form.get("package_id", -1)
 
         try:
             account_id = int(account_id)
             amount = float(amount)
-            package_id = int(package_id)
         except:
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
@@ -546,18 +540,11 @@ def invest():
     if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
-    if not package:
-        reply["log"] = "silly data provided; parameter <package>"
-        return reply_to_remote(jencode(reply))
-    if(package_id==-1 or type(package_id)!=type(0) or isinstance(package_id,unicode) ):
-        reply["log"] = "silly data provided; parameter <package_id>"
-        return reply_to_remote(jencode(reply))
 
-    logfile = file_path("{}{}{}{}.inv".format(account_id,amount,package,package_id))
 
-    package = str(package)
-    
-    if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
+    logfile = file_path("{}{}.inv".format(account_id,amount))
+
+    if libghfu.invest(account_id, amount, 1, logfile):
         reply["status"]=True
 
         threading.Thread(target=libghfu.save_structure, args=(

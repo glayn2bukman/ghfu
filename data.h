@@ -17,12 +17,20 @@ bool GLOCK_INITIALISED = false;
 float POINT_FACTOR = 0.25;
 unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent in some months...) */
 
-/* account fees($) */
+/* account fees($) they sohuld tally up to $400.0*/
 float ACCOUNT_CREATION_FEE = 40.0; /* $ */
 float ANNUAL_SUBSCRIPTION_FEE = 10.0; /* $ */
-float OPERATIONS_FEE = 180.0; /* $ */
-float MINIMUM_INVESTMENT = 500.0; /* 125 points */
-float MAXIMUM_INVESTMENT = 1500.0; /* 375 points */
+float OPERATIONS_FEE = 350.0; /* $ */
+
+float MINIMUM_INVESTMENT = 300.0; /* 75 points */
+float MAXIMUM_INVESTMENT = 700.0; /* 175 points */
+
+/* investment plans */
+float INVESTMENTS[4]={
+    // if you edit these values, edit MINIMUM_INVESTMENT & MAXIMUM_INVESTMENT
+    300.0,500.0,700.0,
+    0.0 /* terminating condition */
+};
 
 
 /* program errors */
@@ -45,6 +53,7 @@ char *ERRORS[] = {
     /*15*/ "FAILED TO CALCULATE TVC, NOT CALCULATION DAY.  INQUIRE WITH MANAGEMENT ABOUT THIS!",
     /*16*/ "PLEASE SET THE MONTHLY-AUTO-REFILL-PERCENTAGES",
     /*17*/ "PACKAGE/SERVICE OF $0 is NOT SOLEDBY THE COMPANY",
+    /*18*/ "INVESTMENTS ARE DESCRET AND SET TO ONLY A FEW SPECIFIC VALUES. INQUIRE WITH ADMIN ABOUT THIS!",
 
 };
 
@@ -65,7 +74,8 @@ char *ACCOUNTS[] = {
     "Independent Brocker",
     "Saphire",
     "Ruby",
-    "Diamond"
+    "Diamond",
+    "Unknown" /* terminating condition */
 };
 
 char *RANKS[] = {
@@ -118,7 +128,7 @@ float IBC[][2] = { /* independent-brocker-commissions/discounts */
 
 float INVESTMEN_SCHEME[][3] = {
     /* array-values are in format {points+, %lowest, %highest} 
-       the data is in descending rank(points) order
+       the data is in descending investment-points order
     */
     {375, 40, 80},
     {250, 40, 70},

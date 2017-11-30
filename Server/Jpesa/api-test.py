@@ -1,8 +1,12 @@
 import requests
 
 url = "https://secure.jpesa.com/api.php"
-test_uname = "********"
-test_pswd = "*********"
+
+auth_data = open("/var/lib/ghfu/.jpesa").read().strip()
+
+i = auth_data.index(";")
+test_uname = auth_data[:i]
+test_pswd = auth_data[i+1:]
 
 def deposit(number, amount):
     "deposit money from mobile money number to jpesa account"
@@ -36,8 +40,8 @@ def check_transaction(ref):
     except:
         print "network or url down!"
 
-#deposit("0752567374",500)
-check_transaction("0B557AD6334B8A2D075741D1CE055D17")
+# deposit("0701173049",500)
+# check_transaction("9F1A2E5FA6BA4D3E5C81D898E3AA0E55")
 
 # references: 
 #   airtel:6598863FBA4747BFA647676370AD8780

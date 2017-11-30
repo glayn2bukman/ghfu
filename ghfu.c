@@ -413,21 +413,21 @@ bool award_commission(Account account, Amount points, String commission_type, St
     return true;
 }
 
-bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name)
+bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name)
 {
     /*python/java/etc interface to invest_money*/
 
     Account account = get_account_by_id(account_id);
 
     FILE *fout = fopen(fout_name, "w");
-    bool invested = invest_money(account,amount, package, package_id, update_system_float, fout);
+    bool invested = invest_money(account,amount, update_system_float, fout);
 
     fclose(fout);
     
     return invested;
 }
 
-bool invest_money(Account account, Amount amount, String package, ID package_id, bool update_system_float, FILE *fout)
+bool invest_money(Account account, Amount amount, bool update_system_float, FILE *fout)
 {
     if(!GLOCK_INITIALISED)
     {
@@ -443,7 +443,13 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
     if (account->investments!=NULL && account->last_investment->months_returned!=12)
         {fprintf(fout, "cant make more than one investment in 12 months"); return false;}
 
-    amount -= OPERATIONS_FEE;
+    /* it was insisted that every investment includes these 3 fees totalling to ~$400
+       as such, if some1 invests at the time they join the company, they pay the fees as due
+       but if they join first and then invest later, then they end up paying the ACCOUNT_CREATION_FEE
+       and ANNUAL_SUBSCRIPTION_FEE twice as they pay em when joining and also when investing!
+    */
+
+    amount -= (OPERATIONS_FEE+ANNUAL_SUBSCRIPTION_FEE+ACCOUNT_CREATION_FEE);
     
     pthread_mutex_lock(&glock);
     
@@ -479,12 +485,31 @@ bool invest_money(Account account, Amount amount, String package, ID package_id,
 
         return false; 
     }
+    /* lastly, check if the investment is descrete */
+    /* also, generate the package name and ID from here if possible! 2 birds, 1 stone...*/
+    String package; ID package_id, package_count=0;
+    for(;; ++package_count)
+    {
+        if (!INVESTMENTS[package_count])
+            {
+                ghfu_warn(18, fout);
+                pthread_mutex_unlock(&glock);
+                return false;            
+            }
+        if(amount==INVESTMENTS[package_count])
+        {
+            package_id = package_count;
+            package = ACCOUNTS[++package_count];
+            break;
+        }
+    }
 
     Investment new_investment = malloc(sizeof(struct investment));
     
     if(new_investment==NULL) memerror(fout);
 
     Amount points = amount*POINT_FACTOR;
+        
     
     time(&(new_investment->date));
 
@@ -624,14 +649,6 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     if(new_account->names==NULL) {gfree(new_account); memerror(fout);}
     join_strings(new_account->names,name_strings);
 
-
-    /* attempt to invest money (if amount>(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))*/
-    Amount _amount = amount;
-    amount = amount-(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE);
-    
-    /* turn investable amount to points */
-    Amount points=amount*POINT_FACTOR;
-
     
     /* add new_account to uplink's children and then give uplink FSB */
     AccountPointer ap1 = malloc(sizeof(struct account_pointer));
@@ -662,8 +679,6 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     }
     else {gfree(ap1); /* you dont want memory leaks, trust me */ }
 
-    if(points) award_commission(new_account, points,"TBB","", fout);
-
     /* add new node to linear structure of all nodes */
     AccountPointer ap = malloc(sizeof(struct account_pointer));
     if(ap==NULL)
@@ -676,11 +691,16 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         memerror(fout);
     }
 
-
+    /* attempt to invest money (if amount>(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))*/
+    Amount _amount = amount;
+    amount -= (ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE);
+    
+    /* turn investable amount to points */
+    Amount points=amount*POINT_FACTOR;
 
     /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
        because invest_money calls incrememt_pv which needs to call children of uplinks)*/
-    if(points && !invest_money(new_account, amount, "Investment", 0, false, fout))
+    if(points>0 && !invest_money(new_account, _amount, false, fout))
     {
         if(uplink!=NULL)
         {
@@ -695,6 +715,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         gfree(new_account);
         return NULL;
     }
+    if(points>0) award_commission(new_account, points,"TBB","", fout);
 
     ap->account = new_account;
     ap->next = NULL;

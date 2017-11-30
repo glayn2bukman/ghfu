@@ -137,8 +137,8 @@ void memerror(FILE *fout);
 void init(String jermCrypt_path, String save_dir);
 bool increment_pv(Account account, const Amount points, FILE *fout);
 bool award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
-bool invest_money(Account account, const Amount amount, const String package, const ID package_id, const bool update_system_float, FILE *fout);
-bool invest(ID account_id, const Amount amount, const String package, const ID package_id, const bool update_system_float, String fout_name);
+bool invest_money(Account account, const Amount amount, const bool update_system_float, FILE *fout);
+bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name);
 Account register_member(Account uplink, String names, Amount amount, FILE *fout);
 ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
 

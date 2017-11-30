@@ -26,8 +26,7 @@
 #   bool dump_structure_details(ID account_id, String fout_name); 
 #   Account get_account_by_id(const ID id);
 #   ID account_id(Account account);
-#   bool invest(ID account_id, const Amount amount, const String package, 
-#        const ID package_id, const bool update_system_float, String fout_name);
+#   bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name);
 #   void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
 #   void purchase_property(ID IB_account_id, const Amount amount, const bool member, 
 #        const String buyer_names, String fout_name);
@@ -60,7 +59,7 @@ from ctypes import *
 libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
 
 # define libghfu function argtypes (so that we can call them normally and let ctypes do any type conversions)
-libghfu.invest.argtypes = [c_long, c_float, c_char_p, c_long, c_int, c_char_p]
+libghfu.invest.argtypes = [c_long, c_float, c_int, c_char_p]
 libghfu.dump_structure_details.argtype = [c_long, c_char_p]
 libghfu.get_account_by_id.argtypes = [c_long]
 #libghfu.perform_monthly_operations.argtypes = [(c_float*2)*4, c_char_p]
@@ -79,6 +78,12 @@ libghfu.account_id.restype = c_long
 #   NB data is a LIST of TUPLES. and the last TUPLE MUST BE (0,0) as this is the terminating 
 #      condition in libghfu
 
+server_log_file_path = os.path.join(path,"Server","log")
+server_log_file = open(server_log_file_path,"a")
+
+def server_log(_log):
+    server_log_file.write("\n{}: {}".format(time.asctime(), _log))
+
 app = Flask(__name__)
 
 known_clients = "127.0.0.1"
@@ -89,7 +94,14 @@ jdecode = json.JSONDecoder().decode
 #mutex = threading.Lock()
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
-EXCHANGE_RATE=3500 # deposit rate is always 200 more DICUSS THIS WITH THE GHFU ADMINS
+
+EXCHANGE_RATE=3600 # deposit rate is always 100/= more DICUSS THIS WITH THE GHFU ADMINS. withdraw value
+                   # is always 50/= less
+                   # also, this value can be modified anytime using uri </update_exchange_rate> but once
+                   # every half-day, the server will first attempt to collect the latest value at
+                   # <http://usd.fxexchangerate.com/ugx/> and in case it fails, then the manually set
+                   # value will be used!
+
 TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
 JPESA_DEPOSIT_CHARGES = .03
 
@@ -131,6 +143,41 @@ def client_known(addr):
             if addr==client: return True
     return False
 
+# define function to auto-update the exchange rate every half-day
+def fetch_current_exchange_rate():
+    global EXCHANGE_RATE
+    exchange_rate_url = "http://usd.fxexchangerate.com/ugx/"
+    
+    while 1:
+        try:
+            data = requests.get(exchange_rate_url).text
+            try:
+                i = data.index(" UGX")
+                if i!=13956:
+                    server_log("the index of \" UGX\" in the exchange-rates \
+url aint where we expected it to be,\
+none-the-less, continuing with the operation")
+                
+                value = data[i-5:i] # very likely that (1,000 <= USD <= 10,000)
+                try:
+                    value = int(value)
+                except:
+                    server_log("the exchange-rates site must have changed configuration, \
+no data could be read using our algorithm")
+                                
+                if value<1000: # very likely that (1,000 <= USD <= 10,000)
+                    server_log("got <{}> as the exchange-rate value from the exchange-rates url.\
+however, this value just is suspicious and we aint gonna use it!".format(value))
+                else:
+                    EXCHANGE_RATE = value
+                    
+            except:
+                server_log("is the exchange-rates url right? cnt find the index of \" UGX\" in it")
+        except: 
+            server_log("the exchange-rates url <{}> was moved".format(exchange_rate_url))
+        
+        time.sleep(12*60*60)
+
 # define function to keep checking on transaction deposit statuses and effect changes to ghfu if the 
 # transaction(deposit/withdraw) is verified. if so, the necesary update to GHFU is effected
 def effect_transaction(code, reference, func=None, args=None, logfile=None):
@@ -146,7 +193,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None):
                 CODES[code]["actionlog"] = "Operation bounced."
                 break
         except: # finance server is down for some reason...
-            print "e"
+            server_log("the finance server is down. look into this ASAP!")
             time.sleep(TRANSACTION_CHECK_DELAY)
             continue
         
@@ -475,19 +522,14 @@ def invest():
     if json_req:
         account_id = json_req.get("id", -1)
         amount = json_req.get("amount", -1)
-        package = str(json_req.get("package", ""))
-        package_id = json_req.get("package_id", -1)
 
     else:
         account_id = request.form.get("id",-1)
         amount = request.form.get("amount", -1)
-        package = request.form.get("package", "")
-        package_id = request.form.get("package_id", -1)
 
         try:
             account_id = int(account_id)
             amount = float(amount)
-            package_id = int(package_id)
         except:
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
@@ -498,18 +540,11 @@ def invest():
     if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
-    if not package:
-        reply["log"] = "silly data provided; parameter <package>"
-        return reply_to_remote(jencode(reply))
-    if(package_id==-1 or type(package_id)!=type(0) or isinstance(package_id,unicode) ):
-        reply["log"] = "silly data provided; parameter <package_id>"
-        return reply_to_remote(jencode(reply))
 
-    logfile = file_path("{}{}{}{}.inv".format(account_id,amount,package,package_id))
 
-    package = str(package)
-    
-    if libghfu.invest(account_id, amount, package, package_id, 1, logfile):
+    logfile = file_path("{}{}.inv".format(account_id,amount))
+
+    if libghfu.invest(account_id, amount, 1, logfile):
         reply["status"]=True
 
         threading.Thread(target=libghfu.save_structure, args=(
@@ -637,6 +672,12 @@ def perform_monthly_operations():
 
     return reply_to_remote(jencode({"status":False, "log":log}))
 
+@app.route("/get_exchange_rate", methods=["POST"])
+def get_current_exchange_rate():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    return reply_to_remote(jencode({"value":EXCHANGE_RATE}))
 
 @app.route("/update_exchange_rate", methods=["POST"])
 def update_exchange_rate():
@@ -664,28 +705,6 @@ def update_exchange_rate():
 
     return reply_to_remote(jencode(reply))
         
-@app.route("/test-deposit", methods=["POST"])
-def test_deposit():
-    if not client_known(request.access_route[-1]): 
-        return reply_to_remote("You are not authorised to access this server!"),401
-
-    reply = {"status":False, "log":""}
-
-    json_req = request.get_json()
-    
-    if not json_req:
-        reply["log"] = "server expects json here"
-        return reply_to_remote(jencode(reply))
-
-    new_internal_code = get_random_code()
-    CODES[new_internal_code] = {"status":False, "actionlog":"pending"}
-    
-    threading.Thread(target=depost_funds_to_jpesa, args=(new_internal_code,"0701173049", 500)).start()
-    
-    reply["status"] = True
-    reply["code"] = new_internal_code
-
-    return reply_to_remote(jencode(reply))
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
@@ -712,6 +731,9 @@ if __name__=="__main__":
     #app.run("0.0.0.0", 54321, threaded=1, debug=1, ssl_context=('cert.pem', 'key.pem'))
 
     finance_server_port = 54322
+
+    # start thread that monitors the exchange rate...
+    threading.Thread(target=fetch_current_exchange_rate, args=()).start()
 
     app.run("0.0.0.0", 50500, threaded=1, debug=1)
 
