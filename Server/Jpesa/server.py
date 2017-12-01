@@ -105,6 +105,55 @@ def deposit(number, amount, code):
 
     return reply
 
+def transfer_funds(email, amount, code):
+    "deposit money from mobile money number to jpesa account"
+    
+    reply = {"status":False, "log":""}
+
+    if code!=finance_server_code:
+        reply["log"] = "wrong finance-code given. operation dumped"
+        return reply
+
+    if not (isinstance(email, str) or isinstance(email, unicode)):
+        reply["log"] = "invalid email given"
+        return reply
+    
+    email = str(email) # just incase its in unicode
+    
+    if not (isinstance(amount,int) or isinstance(amount,float)):
+        reply["log"] = "invalid amount given. expects a numeric value"
+        return reply
+    
+    amount = int(amount)
+    
+    if amount<1000:
+        reply["log"] = "amount must be SHS 1,000+"
+        return reply
+    
+    try:
+        _reply = requests.post(jpesa_url,
+            data = {
+                "command":"jpesa",
+                "action":"send",
+                "username":jpesa_uname,
+                "password":jpesa_pswd,
+                "email":email,
+                "amount":amount
+                }
+        ).text
+        
+        if "ERROR" in _reply:
+            reply["log"] = _reply[_reply.index("]")+1:].strip()
+        else:
+            reply["status"] = True
+            reply["ref"] = _reply[_reply.index("|")+1:].strip()
+        
+    except:
+        reply["log"] = "network or url down. if not, you entered an invalid email or amount"
+
+    return reply
+
+
 def check_transaction(ref, code):
     "check the status of a transaction"
 
@@ -186,6 +235,36 @@ def deposit_funds_to_jpesa():
     reply = deposit(number,amount,code)
     
     return reply_to_remote(jencode(reply))
+
+@app.route("/transfer_funds", methods=["POST"])
+def transfer_funds_to_jpesa():
+    """
+    the function calling this url in the main server should thread it and simply return after calling
+    it as this function could hang in a network trying to reach jpesa. 
+    
+    also, the calling function should return a code to its caller (in the web) so that it can connect
+    this code to the transaction reference that will be returned from here. this will simplify the process
+    of the web-caller determining if the process was sucessfull 
+    """
+
+    if request.access_route[-1]!="127.0.0.1":
+        return reply_to_remote("You are not authorized to perform this operation!"),401
+    
+    reply = {"status":False, "log":""}
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expects json payload!"
+        return reply_to_remote(jencode(reply))
+    
+    email = json_req.get("email","")
+    amount = json_req.get("amount",0)
+    code = json_req.get("code","")
+    
+    reply = transfer_funds(email,amount,code)
+    
+    return reply_to_remote(jencode(reply))
+
 
 @app.route("/transaction_status", methods=["POST"])
 def check_jpesa_transaction_status():

@@ -437,6 +437,12 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     //printf("I-Money\n");
 
+    time_t t; time(&t);
+    struct tm *today = localtime(&t);
+
+    if(today->tm_mday > LAST_INVESTMENT_DAY){ghfu_warn(19,fout); return false;}
+
+
     if(account==NULL) 
         {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
 
@@ -1325,6 +1331,11 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
     //printf("award rank_monthly bonuses\n");
 
+    time_t t; time(&t);
+    struct tm *today = localtime(&t);
+
+    if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(20,fout); return false;}
+
     Amount lower_leg_volume, actual_lower_leg_volume;
     unsigned int i;
 
@@ -1996,6 +2007,10 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     account->available_balance -= amount;
     account->total_redeems += amount;
 
+    /*
+        the actual system floats n expenses aint modified...sohuld they?
+    */
+
     pthread_mutex_unlock(&glock);
 
     return true;
@@ -2190,6 +2205,7 @@ bool set_constant(String constant, Amount value)
     else if(!strcmp(constant, "operations-fee")) OPERATIONS_FEE = value;
     else if(!strcmp(constant, "minimum-investment")) MINIMUM_INVESTMENT = value;
     else if(!strcmp(constant, "maximum-investment")) MAXIMUM_INVESTMENT = value;
+    else if(!strcmp(constant, "last-investment-day")) LAST_INVESTMENT_DAY = (int)value;
 
     else status = false;
 
@@ -2241,10 +2257,10 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     if(encrypt_file==NULL) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
-    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1", 
+    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
         MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
-        ACTIVE_ACCOUNTS,CURRENT_ID
+        ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY
         );
 
     /* dump current auto-refill percentages */
@@ -2324,10 +2340,10 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fin = fopen(data_file_path,"rb");
 
-    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1", 
+    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
-        &ACTIVE_ACCOUNTS,&CURRENT_ID
+        &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY
         );
 
     /* extract monthly-auto-refill-percentages */

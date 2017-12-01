@@ -16,6 +16,7 @@ bool GLOCK_INITIALISED = false;
 
 float POINT_FACTOR = 0.25;
 unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent in some months...) */
+unsigned int LAST_INVESTMENT_DAY = 5; /* we can only get investment money on so many days in a given month */
 
 /* account fees($) they sohuld tally up to $400.0*/
 float ACCOUNT_CREATION_FEE = 40.0; /* $ */
@@ -54,7 +55,8 @@ char *ERRORS[] = {
     /*16*/ "PLEASE SET THE MONTHLY-AUTO-REFILL-PERCENTAGES",
     /*17*/ "PACKAGE/SERVICE OF $0 is NOT SOLEDBY THE COMPANY",
     /*18*/ "INVESTMENTS ARE DESCRET AND SET TO ONLY A FEW SPECIFIC VALUES. INQUIRE WITH ADMIN ABOUT THIS!",
-
+    /*19*/ "TODAY IS PAST THE LAST INVESTMENT DAY. CONSULT WITH ADMIN ABOUT THIS PLEASE",
+    /*20*/ "FAILED TO GIVE MONTHY-RANK-BONUSES. NOT PAYMENT DAY",
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
