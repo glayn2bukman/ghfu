@@ -137,13 +137,13 @@ void memerror(FILE *fout);
 void init(String jermCrypt_path, String save_dir);
 bool increment_pv(Account account, const Amount points, FILE *fout);
 bool award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
-bool invest_money(Account account, const Amount amount, const bool update_system_float, FILE *fout);
-bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name);
-Account register_member(Account uplink, String names, Amount amount, FILE *fout);
-ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
+bool invest_money(Account account, const Amount amount, const bool update_system_float, bool test_feasibility, FILE *fout);
+bool invest(ID account_id, const Amount amount, const bool update_system_float, bool test_feasibility, String fout_name);
+Account register_member(Account uplink, String names, Amount amount, bool test_feasibility, FILE *fout);
+ID register_new_member(ID uplink_id, String names, Amount amount, bool test_feasibility, String fout_name);
 
-bool buy_property(Account IB_account, const Amount amount, FILE *fout);
-bool purchase_property(ID IB_account_id, const Amount amount, String fout_name);
+bool buy_property(Account IB_account, const Amount amount, bool test_feasibility, FILE *fout);
+bool purchase_property(ID IB_account_id, const Amount amount, bool test_feasibility, String fout_name);
 bool auto_refill(Account account, FILE *fout);
 bool raise_rank(Account account, FILE *fout);
 bool calculate_tvc(Account account, FILE *fout);
@@ -163,8 +163,8 @@ bool dump_investments(const Account account, FILE *fout);
 bool dump_direct_children(const Account account, FILE *fout);
 bool dump_structure_details(ID account_id, String fout_name); 
 
-bool redeem_points(Account account, Amount amount, FILE *fout);
-bool redeem_account_points(ID account_id, Amount amount, String fout_path);
+bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *fout);
+bool redeem_account_points(ID account_id, Amount amount, bool test_feasibility, String fout_path);
 
 void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);

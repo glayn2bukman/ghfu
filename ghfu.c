@@ -413,21 +413,21 @@ bool award_commission(Account account, Amount points, String commission_type, St
     return true;
 }
 
-bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name)
+bool invest(ID account_id, const Amount amount, const bool update_system_float, bool test_feasibility, String fout_name)
 {
     /*python/java/etc interface to invest_money*/
 
     Account account = get_account_by_id(account_id);
 
     FILE *fout = fopen(fout_name, "w");
-    bool invested = invest_money(account,amount, update_system_float, fout);
+    bool invested = invest_money(account,amount, update_system_float, test_feasibility, fout);
 
     fclose(fout);
     
     return invested;
 }
 
-bool invest_money(Account account, Amount amount, bool update_system_float, FILE *fout)
+bool invest_money(Account account, Amount amount, bool update_system_float, bool test_feasibility, FILE *fout)
 {
     if(!GLOCK_INITIALISED)
     {
@@ -437,7 +437,8 @@ bool invest_money(Account account, Amount amount, bool update_system_float, FILE
 
     //printf("I-Money\n");
 
-    if(account==NULL) {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
+    if(account==NULL) 
+        {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
 
     // nelson insisted that one can not make more than 1 investments in a year!
     if (account->investments!=NULL && account->last_investment->months_returned!=12)
@@ -502,6 +503,12 @@ bool invest_money(Account account, Amount amount, bool update_system_float, FILE
             package = ACCOUNTS[++package_count];
             break;
         }
+    }
+
+    if (test_feasibility) /* no more checks, operation is feasible*/ 
+    {
+        pthread_mutex_unlock(&glock);
+        return true; 
     }
 
     Investment new_investment = malloc(sizeof(struct investment));
@@ -573,7 +580,7 @@ bool invest_money(Account account, Amount amount, bool update_system_float, FILE
     return true; /* leave this out and you have memory leaks when invest money is called from regiter_member*/
 }
 
-ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name)
+ID register_new_member(ID uplink_id, String names, Amount amount, bool test_feasibility, String fout_name)
 {
     /* if return value==0, error occured, otherwise, new account ID is returned */
 
@@ -584,14 +591,14 @@ ID register_new_member(ID uplink_id, String names, Amount amount, String fout_na
 
     if(uplink_id && get_account_by_id(uplink_id)==NULL){fprintf(fout, "uplink does not exist!"); new_id=0;}
     else
-        new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, fout));
+        new_id = account_id(register_member(get_account_by_id(uplink_id), names, amount, test_feasibility, fout));
     
     fclose(fout);
     
     return new_id;
 }
 
-Account register_member(Account uplink, String names, Amount amount, FILE *fout)
+Account register_member(Account uplink, String names, Amount amount, bool test_feasibility, FILE *fout)
 {
     /* if this function returns NULL, DONT USE RESULT (it indicates an error, more like malloc)*/
 
@@ -607,6 +614,13 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(1,fout); return NULL; }
     if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(9,fout); return NULL; }
+
+    Amount _amount = amount;
+    amount -= (ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE);
+    
+    /* turn investable amount to points */
+    Amount points=amount*POINT_FACTOR;
+
 
     Account new_account = malloc(sizeof(struct account));
     
@@ -640,6 +654,17 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     new_account->highest_leg_ranks[0] = 0.0;
     new_account->highest_leg_ranks[1] = 0.0;
     new_account->highest_leg_ranks[2] = 0.0;
+
+    if (test_feasibility) /* no more checks, operation is feasible*/
+    {
+        if(points>0)
+            invest_money(new_account, _amount, false, test_feasibility, fout);
+        
+        gfree(new_account); /* you dont want memory leaks. trust me on this */
+        
+        return NULL; /*since register doesnt return a bool, check if <fout> has contents to determine if
+                       an error occurered anywhere...*/
+    }
 
     unsigned int buff_length;
     String name_strings[] = {names, "\0"};
@@ -691,16 +716,9 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
         memerror(fout);
     }
 
-    /* attempt to invest money (if amount>(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))*/
-    Amount _amount = amount;
-    amount -= (ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE);
-    
-    /* turn investable amount to points */
-    Amount points=amount*POINT_FACTOR;
-
     /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
        because invest_money calls incrememt_pv which needs to call children of uplinks)*/
-    if(points>0 && !invest_money(new_account, _amount, false, fout))
+    if(points>0 && !invest_money(new_account, _amount, false, test_feasibility, fout))
     {
         if(uplink!=NULL)
         {
@@ -738,7 +756,7 @@ Account register_member(Account uplink, String names, Amount amount, FILE *fout)
     return new_account;
 }
 
-bool buy_property(Account IB_account, Amount amount, FILE *fout)
+bool buy_property(Account IB_account, Amount amount, bool test_feasibility, FILE *fout)
 {
     /* if member(IV or registered investor), get IBC and those points otherwise just add this amount to 
        the system total float */
@@ -753,6 +771,7 @@ bool buy_property(Account IB_account, Amount amount, FILE *fout)
 
     if(!amount){ghfu_warn(17,fout); return false;}
 
+    if (test_feasibility) return true; /* no more checks, operation is feasible*/
 
     if(IB_account!=NULL)
     {
@@ -790,14 +809,14 @@ bool buy_property(Account IB_account, Amount amount, FILE *fout)
     return true;
 }
 
-bool purchase_property(ID IB_account_id, const Amount amount, String fout_name)
+bool purchase_property(ID IB_account_id, const Amount amount, bool test_feasibility, String fout_name)
 {
     /* python/java/etc interface to buy_property*/
     Account IB_account = get_account_by_id(IB_account_id);
 
     FILE *fout = fopen(fout_name, "w");
     
-    bool status = buy_property(IB_account,amount,fout);
+    bool status = buy_property(IB_account,amount, test_feasibility, fout);
     
     fclose(fout);
 
@@ -1952,7 +1971,7 @@ bool dump_structure_details(ID account_id, String fname)
     return status;
 }
 
-bool redeem_points(Account account, Amount amount, FILE *fout)
+bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *fout)
 {
     /* if this function returns true but the money actually is'nt redeemed for some reason (loss in
        network for example or when the mobile money API is down), please REVERSE this operation or the 
@@ -1970,6 +1989,8 @@ bool redeem_points(Account account, Amount amount, FILE *fout)
     if(account==NULL){ghfu_warn(11,fout); return false;}
     if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
 
+    if (test_feasibility) return true; /* no more checks, operation is feasible*/
+
     pthread_mutex_lock(&glock);
     
     account->available_balance -= amount;
@@ -1980,13 +2001,13 @@ bool redeem_points(Account account, Amount amount, FILE *fout)
     return true;
 }
 
-bool redeem_account_points(ID account_id, Amount amount, String fout_name)
+bool redeem_account_points(ID account_id, Amount amount, bool test_feasibility, String fout_name)
 {
     /* python/java/etc interface to redeem_points */
 
     Account account = get_account_by_id(account_id);
     FILE *fout = fopen(fout_name, "w");
-    bool redeemed = redeem_points(account, amount, fout);
+    bool redeemed = redeem_points(account, amount, test_feasibility, fout);
 
     fclose(fout);
 
