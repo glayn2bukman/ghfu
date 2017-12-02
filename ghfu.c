@@ -2205,7 +2205,10 @@ bool set_constant(String constant, Amount value)
     else if(!strcmp(constant, "operations-fee")) OPERATIONS_FEE = value;
     else if(!strcmp(constant, "minimum-investment")) MINIMUM_INVESTMENT = value;
     else if(!strcmp(constant, "maximum-investment")) MAXIMUM_INVESTMENT = value;
-    else if(!strcmp(constant, "last-investment-day")) LAST_INVESTMENT_DAY = (int)value;
+    else if(!strcmp(constant, "last-investment-day")) LAST_INVESTMENT_DAY = (int)value;    
+    else if(!strcmp(constant, "exchange-rate")) EXCHANGE_RATE = (int)value;
+    else if(!strcmp(constant, "withdraw-charge")) WITHDRAW_CHARGE = value;
+    else if(!strcmp(constant, "rate-inflate")) RATE_INFLATE = (int)value;
 
     else status = false;
 
@@ -2257,10 +2260,10 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     if(encrypt_file==NULL) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
-    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1", 
+    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
         MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
-        ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY
+        ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY,EXCHANGE_RATE,WITHDRAW_CHARGE,RATE_INFLATE
         );
 
     /* dump current auto-refill percentages */
@@ -2340,10 +2343,11 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fin = fopen(data_file_path,"rb");
 
-    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1", 
+    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
-        &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY
+        &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY,&EXCHANGE_RATE,&WITHDRAW_CHARGE,
+        &RATE_INFLATE
         );
 
     /* extract monthly-auto-refill-percentages */

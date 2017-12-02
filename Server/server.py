@@ -95,22 +95,14 @@ jdecode = json.JSONDecoder().decode
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
-RATE_INFLATE = 50
-EXCHANGE_RATE=3600 # deposit rate is always 50/= more while withdraw value is always 50/= less
-                   # also, this value can be modified anytime using uri </update_exchange_rate> but once
-                   # every half-day, the server will first attempt to collect the latest value at
-                   # <http://usd.fxexchangerate.com/ugx/> and in case it fails, then the manually set
-                   # value will be used!
-
-WITHDRAW_CHARGE = 9 # this charge is a percentage
-
 TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
 JPESA_DEPOSIT_CHARGES = .03
 
 CODES = {} # every time a random code is generated, its stored here to hold transaction data
-           # so when the client wants to know about the state of a transaction, they i dont querry the 
-           # jpesa api but rather, i cnosult with this dictionary and return whatever the latest status
-           # of the transaction is kept here
+           # so when the client wants to know about the state of a transaction, i dont querry the 
+           # jpesa api but rather, i consult with this dictionary and return whatever the latest status
+           # of the transaction is kept here. the moment a code is nolonger needed, its deleted otherwise
+           # the server would end up consuming GBs of memory holding un-needed data!
 
 FILE_NOT_FOUND = "failed to access file. is account signed in multiple times"
 
@@ -173,7 +165,12 @@ no data could be read using our algorithm")
                     server_log("got <{}> as the exchange-rate value from the exchange-rates url.\
 however, this value just is suspicious and we aint gonna use it!".format(value))
                 else:
-                    EXCHANGE_RATE = value
+                    if not libghfu.set_constant("exchange-rate", value):
+                        server_log("failed to set exchange-rate to {}".format(value))
+
+                    threading.Thread(target=libghfu.dump_constants, args=(
+                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
+                        )).start()
                     
             except:
                 server_log("is the exchange-rates url right? cnt find the index of \" UGX\" in it")
@@ -380,8 +377,11 @@ def register():
             new_internal_code = get_random_code()
             CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
             
+            er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+            ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+
             threading.Thread(target=depost_funds_to_jpesa, 
-                args=(new_internal_code,number, deposit*(EXCHANGE_RATE+RATE_INFLATE), 
+                args=(new_internal_code,number, deposit*(er+ri), 
                     libghfu.register_new_member,(uplink_id, names, deposit, 0, logfile)),
                 kwargs={"logfile":logfile, "update_structure":True}).start()
             
@@ -463,12 +463,12 @@ def buy_package():
     json_req = request.get_json()
     
     if json_req:
-        IB_id = json_req.get("IB_id",-1)
+        IB_id = json_req.get("id",-1)
         amount = json_req.get("amount",0)
         number = str(json_req.get("number", ""))
 
     else:
-        IB_id = request.form.get("IB_id",-1)
+        IB_id = request.form.get("id",-1)
         amount = request.form.get("amount",-1)
         number = str(request.form.get("number", ""))
 
@@ -480,7 +480,7 @@ def buy_package():
             return reply_to_remote(jencode(reply))
 
     if(IB_id==-1 or type(IB_id)!=type(0) or isinstance(IB_id,unicode) ):
-        reply["log"] = "silly data provided; parameter <IB_id>"
+        reply["log"] = "silly data provided; parameter <id>"
         return reply_to_remote(jencode(reply))
     if(amount==0 or (not (type(amount)==type(0.0) or type(amount)==type(0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
@@ -492,11 +492,15 @@ def buy_package():
     logfile = file_path("{}{}.buy_pkg".format(IB_id,amount))
 
     if libghfu.purchase_property(IB_id, c_float(amount), 1, logfile):
+        rm(logfile)
         new_internal_code = get_random_code()
         CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
         
+        er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+        ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+
         threading.Thread(target=depost_funds_to_jpesa, 
-            args=(new_internal_code,number, amount*(EXCHANGE_RATE+RATE_INFLATE), 
+            args=(new_internal_code,number, amount*(er+ri), 
                 libghfu.purchase_property,(IB_id, c_float(amount), 0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         
@@ -512,7 +516,8 @@ def buy_package():
 def get_data_constants():
     """ return data constants ie;
         POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
-        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,LAST_INVESTMENT_DAY
+        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,LAST_INVESTMENT_DAY,
+        EXCHANGE_RATE, WITHDRAW_CHARGE,RATE_INFLATE
     """
 
     if not client_known(request.access_route[-1]): 
@@ -528,6 +533,9 @@ def get_data_constants():
     reply["minimum-investment"] = c_float.in_dll(libghfu, "MINIMUM_INVESTMENT").value
     reply["maximum-investment"] = c_float.in_dll(libghfu, "MAXIMUM_INVESTMENT").value
     reply["last-investment-day"] = c_int.in_dll(libghfu, "LAST_INVESTMENT_DAY").value
+    reply["exchange-rate"] = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+    reply["withdraw-charge"] = c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value
+    reply["rate-inflate"] = c_int.in_dll(libghfu, "RATE_INFLATE").value
 
     return reply_to_remote(jencode(reply))
 
@@ -535,7 +543,8 @@ def get_data_constants():
 def set_data_constants():
     """ set data constants ie;
         POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
-        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT, LAST_INVESTMENT_DAY
+        OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT, LAST_INVESTMENT_DAY,
+        EXCHANGE_RATE, WITHDRAW_CHARGE,RATE_INFLATE
     """
 
     if not client_known(request.access_route[-1]): 
@@ -615,11 +624,15 @@ def invest():
     logfile = file_path("{}{}.inv".format(account_id,amount))
 
     if libghfu.invest(account_id, amount, 1, 1,logfile):
+        rm(logfile)
         new_internal_code = get_random_code()
         CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
         
+        er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+        ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+
         threading.Thread(target=depost_funds_to_jpesa, 
-            args=(new_internal_code,number, amount*(EXCHANGE_RATE+RATE_INFLATE), 
+            args=(new_internal_code,number, amount*(er+ri), 
                 libghfu.invest,(account_id, amount, 1,0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         
@@ -746,39 +759,6 @@ def perform_monthly_operations():
 
     return reply_to_remote(jencode({"status":False, "log":log}))
 
-@app.route("/get_exchange_rate", methods=["POST"])
-def get_current_exchange_rate():
-    if not client_known(request.access_route[-1]): 
-        return reply_to_remote("You are not authorised to access this server!"),401
-
-    return reply_to_remote(jencode({"value":EXCHANGE_RATE}))
-
-@app.route("/update_exchange_rate", methods=["POST"])
-def update_exchange_rate():
-    if not client_known(request.access_route[-1]): 
-        return reply_to_remote("You are not authorised to access this server!"),401
-
-    reply = {"status":False, "log":""}
-
-    json_req = request.get_json()
-    
-    if not json_req:
-        reply["log"] = "server expects json here"
-        return reply_to_remote(jencode(reply))
-
-    er = json_req.get("rate",0) # dollar->ugx rate eg 3600
-
-    try: er = float(er)
-    except:
-        reply["log"] = "invalid rate given. expecting float or integer"
-        return reply_to_remote(jencode(reply))
-
-    EXCHANGE_RATE = er
-
-    reply["status"] = True
-
-    return reply_to_remote(jencode(reply))
-        
 
 @app.route("/transaction_status", methods=["POST"])
 def check_transaction_status():
@@ -863,11 +843,16 @@ def transfer_funds_to_client_jpesa_account():
     logfile = file_path("{}{}.fundstransfer".format(account_id,amount))
 
     if libghfu.redeem_account_points(account_id, amount, 1, logfile):
+        rm(logfile)
         new_internal_code = get_random_code()
         CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+
+        er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+        wc = c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value
+        ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
         
         threading.Thread(target=transfer_funds_to_other_jpesa_account, 
-            args=(new_internal_code,email, amount*(EXCHANGE_RATE-RATE_INFLATE)*(100-WITHDRAW_CHARGE)/100., 
+            args=(new_internal_code,email, amount*(er-ri)*(100-wc)/100., 
                 libghfu.redeem_account_points, (account_id, amount, 0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         

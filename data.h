@@ -33,6 +33,18 @@ float INVESTMENTS[4]={
     0.0 /* terminating condition */
 };
 
+/* exchange rate related variables */
+int RATE_INFLATE = 50;
+int EXCHANGE_RATE=3600; /* 
+                        deposit rate is always <RATE_INFLATE> more while withdraw value is always 
+                        RATE_INFLATE less.
+                        also, this value can be modified anytime using uri </update_exchange_rate> but once
+                        every half-day, the server will first attempt to collect the latest value at
+                        <http://usd.fxexchangerate.com/ugx/> and in case it fails, then the manually set
+                        value will be used!
+                    */
+float WITHDRAW_CHARGE = 9.0; // this charge is the percentage GHFU charges a client when they withdraw funds 
+
 
 /* program errors */
 char *ERRORS[] = {
