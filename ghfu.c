@@ -22,6 +22,10 @@
 
 void memerror(FILE *fout)
 {
+    /* memerror causes the program to exit immediately. however, if this aint the case, please
+       ensure that all possible memerror's dont leave any loacked mutex locked before the function
+       calling memerror returns otherwise you'll get a freaking hanging program!!!!!
+    */
     ghfu_warn(0,fout);
 
     /* dump all data to file here (dont overwrite files, always create new files everytime you dump)*/
@@ -232,6 +236,8 @@ bool award_commission(Account account, Amount points, String commission_type, St
     Commission new_commission = malloc(sizeof(struct commission));
     if(new_commission==NULL) memerror(fout);
 
+    time(&(new_commission->date));
+
     new_commission->reason = NULL;
     new_commission->amount = 0;
 
@@ -320,6 +326,8 @@ bool award_commission(Account account, Amount points, String commission_type, St
 
                 uplink->last_commission = malloc(sizeof(struct commission));
                 if(uplink->last_commission==NULL) memerror(fout);
+
+                time(&(uplink->last_commission->date));
 
                 uplink->last_commission->reason = NULL;
                 uplink->last_commission->amount = p_comm;
@@ -448,15 +456,10 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     // nelson insisted that one can not make more than 1 investments in a year!
     if (account->investments!=NULL && account->last_investment->months_returned!=12)
-        {fprintf(fout, "cant make more than one investment in 12 months"); return false;}
+        {fprintf(fout, "cant make more than one investment in 12 months\n"); return false;}
 
-    /* it was insisted that every investment includes these 3 fees totalling to ~$400
-       as such, if some1 invests at the time they join the company, they pay the fees as due
-       but if they join first and then invest later, then they end up paying the ACCOUNT_CREATION_FEE
-       and ANNUAL_SUBSCRIPTION_FEE twice as they pay em when joining and also when investing!
-    */
 
-    amount -= (OPERATIONS_FEE+ANNUAL_SUBSCRIPTION_FEE+ACCOUNT_CREATION_FEE);
+    amount -= OPERATIONS_FEE;
     
     pthread_mutex_lock(&glock);
     
@@ -538,6 +541,9 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
     new_investment->returns = 0;
     new_investment->months_returned = 0;
 
+    new_investment->total_returns_on_creation = account->total_returns;
+    new_investment->skipped_first_payment_day = false;
+
     new_investment->next = NULL;
     new_investment->prev = NULL;
 
@@ -616,13 +622,13 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
 
     //printf("Reg Member\n");
 
-    if(amount<(ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE))
+    if(amount<(ACCOUNT_CREATION_FEE))
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(1,fout); return NULL; }
-    if(amount>ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+MAXIMUM_INVESTMENT+OPERATIONS_FEE)
+    if(amount>ACCOUNT_CREATION_FEE + MAXIMUM_INVESTMENT+OPERATIONS_FEE)
         { fprintf(fout, "failed to add <%s>...",names); ghfu_warn(9,fout); return NULL; }
 
     Amount _amount = amount;
-    amount -= (ACCOUNT_CREATION_FEE + ANNUAL_SUBSCRIPTION_FEE+OPERATIONS_FEE);
+    amount -= ACCOUNT_CREATION_FEE;
     
     /* turn investable amount to points */
     Amount points=amount*POINT_FACTOR;
@@ -655,6 +661,9 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     new_account->investments = NULL;
     new_account->last_investment = NULL;
 
+    new_account->withdraws = NULL;
+    new_account->last_withdraw = NULL;
+
     new_account->rank = 0;
 
     new_account->highest_leg_ranks[0] = 0.0;
@@ -664,7 +673,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     if (test_feasibility) /* no more checks, operation is feasible*/
     {
         if(points>0)
-            invest_money(new_account, _amount, false, test_feasibility, fout);
+            invest_money(new_account, amount, false, test_feasibility, fout);
         
         gfree(new_account); /* you dont want memory leaks. trust me on this */
         
@@ -724,7 +733,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
 
     /* attempt to invest money (after declaring that new_member is a child of uplink; this is important
        because invest_money calls incrememt_pv which needs to call children of uplinks)*/
-    if(points>0 && !invest_money(new_account, _amount, false, test_feasibility, fout))
+    if(points>0 && !invest_money(new_account, amount, false, test_feasibility, fout))
     {
         if(uplink!=NULL)
         {
@@ -858,10 +867,31 @@ bool auto_refill(Account account, FILE *fout)
         
     Commission new_commission;
     Investment inv;
-    unsigned int i, buff_length;
+    float min_accaptable_returns, max_accaptable_returns, accumulated_returns_since_investment;
+    unsigned int i, buff_length, scenario; /*
+        scenario cases;
+         0) months_returned for investment < 12
+         1) total_returns since investment < investment + max profit possible.
+         2) total_returns since investment + this month's return > investment + max profit possible
+         3) total_returns since investment + 12'th month's return < investment + min profit possible
+         
+         ie;
+         check investment->skipped_first_payment_day is true. if not, set to true and move on to next
+            investment
+
+         check for condition 0 and only proceed if its met then... 
+         first check for condition 1. If it passes, calculate the new return and check for
+         condition 2. If condition 2 fails, let the returns be whatever is missing to top the total
+         returns to total_returns since investment + max-profit possible.
+         If its the 11'th month(before u increment it to 12'th), then check for condition 3. Th condition
+         checks for 11'th or 12'th month depending on if months_returned is incremented before or after
+         these checks
+         
+                                            */
     Amount returns;
 
     char returns_str[16], points_str[32], active_percentage_str[16];
+    String reason_strings[10];                        
 
     if(account!=NULL)
     {
@@ -871,7 +901,7 @@ bool auto_refill(Account account, FILE *fout)
            inv = account->investments;
            while(inv!=NULL)
            {
-               if(inv->months_returned<12)
+               if(inv->skipped_first_payment_day && inv->months_returned<12)
                {
                     i = 0;
                     for(; MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]; ++i)
@@ -881,11 +911,37 @@ bool auto_refill(Account account, FILE *fout)
                     
                     returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
 
+                    min_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][3])*.01*12;
+                    max_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][4])*.01*12;
+                    accumulated_returns_since_investment = account->total_returns - inv->total_returns_on_creation;
+
+                    // here, scenario represents the error to reflect
+                    if (accumulated_returns_since_investment>=max_accaptable_returns)
+                    {
+                        scenario = 21; 
+                        returns=0;
+                    }
+                    else if (accumulated_returns_since_investment + returns > max_accaptable_returns)
+                    {
+                        scenario = 22;
+                        returns = max_accaptable_returns-accumulated_returns_since_investment;
+                    }
+                    else if ( (inv->months_returned==11) &&
+                        (accumulated_returns_since_investment + returns < min_accaptable_returns) )
+                    {
+                        scenario = 23;
+                        returns = min_accaptable_returns-accumulated_returns_since_investment;
+                    }
+                    else
+                        scenario = 0; // normal scenario
+
                     if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
+
+                        time(&(new_commission->date));
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -906,11 +962,28 @@ bool auto_refill(Account account, FILE *fout)
                         }
 
                         sprintf(returns_str," ($%.2f)",returns);
-                        sprintf(points_str," worth %.2f points",inv->amount);
-                        sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
-                        String reason_strings[] = {"Investment return for package <", 
-                            inv->package, "> ",points_str ,returns_str, 
-                            " given at", active_percentage_str, "\0"};
+
+                        if (!scenario)
+                        {
+                            sprintf(points_str," worth %.2f points",inv->amount);
+                            sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
+
+                            reason_strings[0] = "Investment return for package <";
+                            reason_strings[1] = inv->package;
+                            reason_strings[2] = "> ";
+                            reason_strings[3] = points_str;
+                            reason_strings[4] = returns_str;
+                            reason_strings[5] = " given at";
+                            reason_strings[6] = active_percentage_str;
+                            reason_strings[7] = "\0";
+                                                     }    
+                        else
+                        {
+                            reason_strings[0] = ERRORS[scenario]; 
+                            reason_strings[1] = returns_str;
+                            reason_strings[2] = "\0";                        
+                        }
+                        
                         length_of_all_strings(reason_strings, &buff_length);
 
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
@@ -931,6 +1004,10 @@ bool auto_refill(Account account, FILE *fout)
                     }
                    
                }
+
+               if (!(inv->skipped_first_payment_day))
+                    inv->skipped_first_payment_day = true;
+
                inv = inv->next;
            }
            
@@ -955,22 +1032,47 @@ bool auto_refill(Account account, FILE *fout)
            inv = acc->investments;
            while(inv!=NULL)
            {
-               if(inv->months_returned<12)
+               if(inv->skipped_first_payment_day && inv->months_returned<12)
                {
                     i = 0;
                     for(; MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]; ++i)
                     {
-                        //fprintf(stdout,"pts=%.2f, ptg=%.2f%%\n",percentages[i][0],percentages[i][1]);
                         if(inv->amount >= MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) break;
                     }
                     
                     returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
+
+                    min_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][3])*.01*12;
+                    max_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][4])*.01*12;
+                    accumulated_returns_since_investment = acc->total_returns - inv->total_returns_on_creation;
+
+                    // here, scenario represents the error to reflect
+                    if (accumulated_returns_since_investment>=max_accaptable_returns)
+                    {
+                        scenario = 21; 
+                        returns=0;
+                    }
+                    else if (accumulated_returns_since_investment + returns > max_accaptable_returns)
+                    {
+                        scenario = 22;
+                        returns = max_accaptable_returns-accumulated_returns_since_investment;
+                    }
+                    else if ( (inv->months_returned==11) &&
+                        (accumulated_returns_since_investment + returns < min_accaptable_returns) )
+                    {
+                        scenario = 23;
+                        returns = min_accaptable_returns-accumulated_returns_since_investment;
+                    }
+                    else
+                        scenario = 0; // normal scenario
 
                     if(!MONTHLY_AUTO_REFILL_PERCENTAGES[i][0]) ghfu_warn(13,fout);
                     else
                     {
                         new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
+
+                        time(&(new_commission->date));
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -991,11 +1093,28 @@ bool auto_refill(Account account, FILE *fout)
                         }
 
                         sprintf(returns_str," ($%.2f)",returns);
-                        sprintf(points_str," worth %.2f points",inv->amount);
-                        sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
-                        String reason_strings[] = {"Investment return for package <", 
-                            inv->package, "> ",points_str ,returns_str, 
-                            " given at", active_percentage_str, "\0"};
+
+                        if (!scenario)
+                        {
+                            sprintf(points_str," worth %.2f points",inv->amount);
+                            sprintf(active_percentage_str," %.2f%%",MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
+
+                            reason_strings[0] = "Investment return for package <";
+                            reason_strings[1] = inv->package;
+                            reason_strings[2] = "> ";
+                            reason_strings[3] = points_str;
+                            reason_strings[4] = returns_str;
+                            reason_strings[5] = " given at";
+                            reason_strings[6] = active_percentage_str;
+                            reason_strings[7] = "\0";
+                                                     }    
+                        else
+                        {
+                            reason_strings[0] = ERRORS[scenario]; 
+                            reason_strings[1] = returns_str;
+                            reason_strings[2] = "\0";                        
+                        }
+
                         length_of_all_strings(reason_strings, &buff_length);
 
                         /* create a new array to hold this commission reason (you cant just assign a local char[] to
@@ -1016,6 +1135,10 @@ bool auto_refill(Account account, FILE *fout)
                     }
                    
                }
+               
+               if (!(inv->skipped_first_payment_day))
+                    inv->skipped_first_payment_day = true;
+
                inv = inv->next;
            }
            
@@ -1081,6 +1204,10 @@ bool raise_rank(Account account, FILE *fout)
 
     rank_raised = true;
     
+    // the logic for the one-time rank-change lumpsum changed n we decided to leave this out of the first
+    // released version hence the comment for this code
+    /*
+    
     if(RANK_DETAILS[rank][3])
     {
         unsigned int buff_length=0;
@@ -1091,6 +1218,8 @@ bool raise_rank(Account account, FILE *fout)
 
         award_commission(account, RANK_DETAILS[rank][3], "DRA", buff, fout);
     }
+    
+    */
     
     pthread_mutex_lock(&glock);
 
@@ -1173,6 +1302,8 @@ bool calculate_tvc(Account account, FILE *fout)
             {
                         new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
+
+                        time(&(new_commission->date));
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1271,6 +1402,8 @@ bool calculate_tvc(Account account, FILE *fout)
             {
                         new_commission = malloc(sizeof(struct commission));
                         if(new_commission==NULL) memerror(fout);
+
+                        time(&(new_commission->date));
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1453,6 +1586,7 @@ void show_commissions(Account account)
     //printf("show commissions\n");
 
     Commission c;
+    struct tm *lt;
     
     if (account!=NULL)
     {        
@@ -1464,7 +1598,13 @@ void show_commissions(Account account)
         if(c==NULL) printf("    None\n");
 
         int i = 1;
-        while(c!=NULL){printf("    %d) %s\n",i, c->reason); c=c->next; ++i;}        
+        while(c!=NULL)
+        {
+            lt = localtime(&(c->date));
+            printf("    %d) %d/%d/%d: %s\n",i, 
+                lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                c->reason); c=c->next; ++i;
+        }        
         
         pthread_mutex_unlock(&glock);
         
@@ -1493,7 +1633,13 @@ void show_commissions(Account account)
         if(c==NULL) printf("    None\n");
 
         int i = 1;
-        while(c!=NULL){printf("    %d) %s\n",i, c->reason); c=c->next; ++i;}
+        while(c!=NULL)
+        {
+            lt = localtime(&(c->date));
+            printf("    %d) %d/%d/%d: %s\n",i, 
+                lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                c->reason); c=c->next; ++i;
+        }
 
         pthread_mutex_unlock(&glock);
 
@@ -1514,6 +1660,7 @@ bool dump_commissions(const Account account, FILE *fout)
     //printf("dump commissions\n");
 
     Commission c;
+    struct tm *lt;
     
     if (account!=NULL)
     {
@@ -1527,7 +1674,12 @@ bool dump_commissions(const Account account, FILE *fout)
         {
             if(started) fprintf(fout,",");
             started = started ? started : true;
-            fprintf(fout,"[%.2f,\"%s\"]",c->amount, c->reason);
+            
+            lt = localtime(&(c->date));
+
+            fprintf(fout,"[\"%d/%d/%d\", %.2f,\"%s\"]",
+                lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                c->amount, c->reason);
             c=c->next;
             
         }
@@ -1648,6 +1800,8 @@ void show_investments(const Account account)
             printf("    Weight: %.2f points\n",inv->amount);
             printf("    Package: %s\n",inv->package);
             printf("    Months returned: %d\n",inv->months_returned);
+            printf("    Total investment returns: %.2f\n",inv->returns);
+            printf("    Total returns at creation: %.2f\n",inv->total_returns_on_creation);
             
             inv = inv->next;
             
@@ -1671,7 +1825,7 @@ void show_investments(const Account account)
 
         pthread_mutex_lock(&glock);
 
-        inv = account->investments;
+        inv = acc->investments;
 
         if(inv==NULL) printf("    None\n");
 
@@ -1694,6 +1848,7 @@ void show_investments(const Account account)
         pthread_mutex_unlock(&glock);
     }
 }
+
 
 bool dump_investments(const Account account, FILE *fout)
 {
@@ -1725,9 +1880,10 @@ bool dump_investments(const Account account, FILE *fout)
 
             lt = localtime(&(inv->date));
 
-            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%ld,%d, %.2f]",
+            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f,\"%s\",%ld,%d, %.2f, %.2f]",
                 lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
-                inv->amount,inv->package,inv->package_id,inv->months_returned, inv->returns);
+                inv->amount,inv->package,inv->package_id,inv->months_returned, inv->returns,
+                inv->total_returns_on_creation);
             inv = inv->next;            
         }
 
@@ -1739,6 +1895,130 @@ bool dump_investments(const Account account, FILE *fout)
 
     return true;
 }
+
+void show_withdraws(const Account account)
+{
+    /* the code for account==NULL is the same as that for otherrwise but in a loop. i dint want to 
+       make the function recursive as this becomes CPU expensive in the long run */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO show investments. glock NOT INITIALISED. did you call init?"); 
+        return;
+    }
+
+    //printf("show investments\n");
+
+    Withdraw w;
+    struct tm *lt;
+    int i;
+    if(account!=NULL)
+    {
+        printf("\n  %s's WITHDRAWS\n",account->names);
+
+        pthread_mutex_lock(&glock);
+
+        w = account->withdraws;
+
+        if(w==NULL) printf("    None\n");
+        
+        i = 1;
+        
+        while(w!=NULL)
+        {
+            lt = localtime(&(w->date));
+            printf("    %d) %d:%d, %d/%d/%d: $%.2f\n",
+                i, lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900), w->amount);
+            
+            w = w->next;            
+        }
+
+        pthread_mutex_unlock(&glock);
+
+        return;
+    }
+    
+    AccountPointer acc_p = HEAD;
+    Account acc;
+    acc_p = acc_p==NULL ? acc_p : acc_p->next;
+    
+    while(acc_p!=NULL)
+    {
+
+        pthread_mutex_lock(&glock);
+        acc = acc_p->account;
+
+        printf("\n  %s's WITHDRAWS\n",acc->names);
+
+        pthread_mutex_lock(&glock);
+
+        w = acc->withdraws;
+
+        if(w==NULL) printf("    None\n");
+        
+        i = 1;
+        
+        while(w!=NULL)
+        {
+            lt = localtime(&(w->date));
+            printf("    %d) %d:%d, %d/%d/%d: $%.2f\n",
+                i, lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900), w->amount);
+            
+            w = w->next;            
+        }
+
+        acc_p = acc_p->next;
+
+        pthread_mutex_unlock(&glock);
+    }
+}
+
+
+bool dump_withdraws(const Account account, FILE *fout)
+{
+    /* dump investments to json file */
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump investments. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
+    //printf("dump investments\n");
+
+    Withdraw w;
+    struct tm *lt;
+    if(account!=NULL)
+    {
+        pthread_mutex_lock(&glock);
+        
+        w = account->withdraws;
+
+        fprintf(fout, ",\"withdraws\":[");
+        
+        bool started = false;
+        while(w!=NULL)
+        {
+            if(started) fprintf(fout, ",");
+            started = started ? started : true;
+
+            lt = localtime(&(w->date));
+
+            fprintf(fout, "[\"%d:%d, %d/%d/%d\",%.2f]",
+                lt->tm_hour,lt->tm_min,lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                w->amount);
+            w = w->next;            
+        }
+
+        fprintf(fout, "]");
+
+        pthread_mutex_unlock(&glock);
+
+    }
+
+    return true;
+}
+
 
 void show_direct_children(const Account account)
 {
@@ -1890,6 +2170,7 @@ void structure_details(const Account account)
         show_investments(account);
         show_commissions(account);
         show_direct_children(account);
+        show_withdraws(account);
         
         return;
     }
@@ -1920,6 +2201,7 @@ void structure_details(const Account account)
         show_investments(acc);
         show_commissions(acc);
         show_direct_children(acc);
+        show_withdraws(acc);
 
         acc_p = acc_p->next;
     }
@@ -1970,6 +2252,7 @@ bool dump_structure_details(ID account_id, String fname)
     dump_leg_volumes(account,fout) ? 1: (status=false);
     dump_investments(account, fout) ? 1: (status=false);
     dump_direct_children(account, fout) ? 1: (status=false);
+    dump_withdraws(account, fout) ? 1: (status=false);
 
     fprintf(fout, "}");
 
@@ -2003,6 +2286,27 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     if (test_feasibility) return true; /* no more checks, operation is feasible*/
 
     pthread_mutex_lock(&glock);
+
+    /* create new withdraw and add it to the account's withdraws */
+    Withdraw new_withdraw = malloc(sizeof(struct withdraw));
+    if(new_withdraw==NULL) memerror(fout);
+
+    time(&(new_withdraw->date));
+    new_withdraw->amount = amount;
+
+    new_withdraw->next = NULL;
+    new_withdraw->prev = NULL;
+
+    if(account->withdraws==NULL)
+        account->withdraws = new_withdraw;
+    else
+    {
+        new_withdraw->prev = account->last_withdraw;
+        account->last_withdraw->next = new_withdraw;
+    }
+    
+    account->last_withdraw = new_withdraw;
+
     
     account->available_balance -= amount;
     account->total_redeems += amount;
@@ -2142,6 +2446,7 @@ bool monthly_operations(FILE *fout)
 
     auto_refill(NULL, fout) ? true: (status=false);
     calculate_tvc(NULL,fout) ? true: (status=false);
+    
     award_rank_monthly_bonuses(NULL, fout) ? true: (status=false);
 
     return status;
@@ -2444,6 +2749,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     Commission commission;
     Investment investment;
+    Withdraw withdraw;
 
     unsigned long number_of_items;
 
@@ -2460,6 +2766,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
             5) dump the number of investments and then for each investment, dump the date then
                the amount, returns, months returned, package id, the length of the package name 
                and the package name itself
+            6) dump the number of withdraws and then for each withdraw, dump the amount and date
                
                NB: since the last attr to be represented is a string whse length is known(if there
                    was an investment), there is no need to separate different accounts with \x1
@@ -2482,6 +2789,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
                 
                 //investment data format: date,amount,pkg-name,pkg-id,months-returned,total-returns
                 investments: [(13625468,200.03,"pkg 1", 23,3,163.89)]
+                withdraws: [(136297584,23.89), (136297576,13.01)]
              
                 the output would be(neglect the newlines);
                 
@@ -2492,6 +2800,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
                 2\x123.56\x18\x1reason 156.18\x117\x1wow this is cool!
                 1\x113625468\x1200.03\x1163.89\x13\x1
                 23\x15\x1pkg 1
+                2\x1136297584\x123.89\x1136297576\x113.01\x1
              
             NB: after dumping strings, dont use the separation xter(bcoz the length of the string
                 dumped just b4 it tells us exactly where to stop scanning for the string!). however,
@@ -2536,7 +2845,6 @@ bool save_structure(String jermCrypt_path, String save_dir)
         }
 
         /* start next section (commissions)*/
-
         commission = acc->commissions;
         number_of_items = 0;
         if(commission==NULL)
@@ -2550,7 +2858,10 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
             while(commission!=NULL)
             {
-                fprintf(fout, "%.2f\x1%ld\x1%s",commission->amount, strlen(commission->reason), 
+                fprintf(fout, "%ld\x1%.2f\x1%ld\x1%s",
+                    commission->date,
+                    commission->amount, 
+                    strlen(commission->reason), 
                     commission->reason);
                 commission = commission->next;
             }
@@ -2570,11 +2881,33 @@ bool save_structure(String jermCrypt_path, String save_dir)
             investment = acc->investments;
             while(investment!=NULL)
             {
-                fprintf(fout, "%ld\x1%.2f\x1%ld\x1%.2f\x1%d\x1%ld\x1%s",
-                    investment->date, investment->amount,  
+                fprintf(fout, "%ld\x1%.2f\x1%.2f\x1%d\x1%ld\x1%.2f\x1%d\x1%ld\x1%s",
+                    investment->date, investment->amount,
+                    investment->total_returns_on_creation,investment->skipped_first_payment_day,
                     investment->package_id, investment->returns, investment->months_returned,
                     strlen(investment->package), investment->package);
                 investment = investment->next;
+            }
+        }
+
+        /* start next section (withdraws)*/
+        withdraw = acc->withdraws;
+        number_of_items = 0;
+        if(withdraw==NULL)
+            fprintf(fout, "%ld\x1",number_of_items);
+        else
+        {
+            while(withdraw!=NULL){++number_of_items; withdraw=withdraw->next;}
+            fprintf(fout, "%ld\x1",number_of_items);
+
+            withdraw = acc->withdraws;
+
+            while(withdraw!=NULL)
+            {
+                fprintf(fout, "%ld\x1%.2f\x1",
+                    withdraw->date,
+                    withdraw->amount);
+                withdraw = withdraw->next;
             }
         }
         
@@ -2662,6 +2995,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
     Account acc;
     Commission commission, p_commission, new_commission;
     Investment investment, p_investment, new_investment;
+    Withdraw withdraw, p_withdraw, new_withdraw;
 
     Child child_p=NULL, last_child_p=NULL, new_child_p, p_child_p;
     unsigned long number_of_items, child_id, string_index, string_length;
@@ -2694,6 +3028,14 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 p_investment = investment;
                 investment = investment->next;
                 gfree(p_investment);
+            }
+
+            withdraw = acc->withdraws;
+            while(withdraw!=NULL)
+            {
+                p_withdraw = withdraw;
+                withdraw = withdraw->next;
+                gfree(p_withdraw);
             }
             
             child = acc->children;
@@ -2766,6 +3108,9 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
         new_account->investments = NULL;
         new_account->last_investment = NULL;
+
+        new_account->withdraws = NULL;
+        new_account->last_withdraw = NULL;
 
         new_account->rank = 0;
 
@@ -2859,12 +3204,16 @@ bool load_structure(String jermCrypt_path, String save_dir)
                     gfree(new_account);
                     memerror(stdout);
                 }
+
+                time(&(new_commission->date));
                 
                 new_commission->amount = 0;
                 new_commission->reason = NULL;
                 new_commission->next = NULL;
                 new_commission->prev = NULL;
                 
+                fscanf(fin,"%ld\x1",&new_commission->date);
+
                 fscanf(fin,"%f\x1",&new_commission->amount);
 
                 string_length = 0;
@@ -2927,8 +3276,13 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 new_investment->next = NULL;
                 new_investment->prev = NULL;
 
-                fscanf(fin, "%ld\x1%f\x1%ld\x1%f\x1%d\x1",
+                new_investment->total_returns_on_creation = 0.0;
+                new_investment->skipped_first_payment_day = false;
+
+                fscanf(fin, "%ld\x1%f\x1%f\x1%d\x1%ld\x1%f\x1%d\x1",
                     &(new_investment->date), &(new_investment->amount),  
+                    &(new_investment->total_returns_on_creation),
+                    &(new_investment->skipped_first_payment_day),
                     &(new_investment->package_id), &(new_investment->returns), 
                     &(new_investment->months_returned)
                 );
@@ -2971,11 +3325,61 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 }
                 new_account->last_investment = new_investment;
                 
-
-                
                 --number_of_items;
             }
         }
+
+        number_of_items = 0;
+        fscanf(fin,"%ld\x1",&number_of_items);
+
+        if(number_of_items)
+        {
+            while(number_of_items)
+            {                
+                new_withdraw = malloc(sizeof(struct withdraw));
+                if(new_withdraw==NULL)
+                {
+                    gfree(new_account->names); 
+                    
+                    Commission c = new_account->commissions;
+                    while(c!=NULL)
+                    {
+                        gfree(c->reason);
+                        p_commission = c;
+                        c = c->next;
+                        gfree(p_commission);
+                    }
+                    Investment inv = new_account->investments;
+                    while(inv!=NULL)
+                    {
+                        gfree(inv->package);
+                        p_investment = inv;
+                        inv = inv->next;
+                        gfree(p_investment);
+                    }
+                    gfree(new_account); 
+                    memerror(stdout);                
+                }
+
+                fscanf(fin,"%ld\x1%f\x1",&(new_withdraw->date), &(new_withdraw->amount));
+
+                new_withdraw->next = NULL;
+                new_withdraw->prev = NULL;
+                                
+                if(new_account->withdraws==NULL)
+                    new_account->withdraws = new_withdraw;
+                else
+                {
+                    new_withdraw->prev = new_account->last_withdraw;
+                    new_account->last_withdraw->next = new_withdraw;
+                }
+                
+                new_account->last_withdraw = new_withdraw;
+
+                --number_of_items;
+            }
+        }
+
 
         acc_p = malloc(sizeof(struct account_pointer));
         if(acc_p==NULL)
@@ -2998,6 +3402,14 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 inv = inv->next;
                 gfree(p_investment);
             }
+            Withdraw w = new_account->withdraws;
+            while(w!=NULL)
+            {
+                p_withdraw = w;
+                w = w->next;
+                gfree(p_withdraw);
+            }
+
             gfree(new_account); 
             memerror(stdout);                
         }

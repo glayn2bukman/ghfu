@@ -289,6 +289,26 @@ def transfer_funds_to_other_jpesa_account(
         CODES[internal_code]["status"] = False
         CODES[internal_code]["actionlog"] = "Failed to reach finance server"
 
+# function to initialte funds transfer from GHFU jpesa account to another jpesa account
+def transfer_funds_to_mobile_money(
+    internal_code, number, amount, func, args, logfile=None, update_structure=True):
+    """
+    read the doctsring for function <depost_funds_to_jpesa> above to understand this logic
+    """
+    try:
+        reply = requests.post("http://0.0.0.0:{}/transfer_funds_to_mobile_money".format(finance_server_port), 
+                json={"code":finance_server_code, "number":number, "amount":amount}).text
+        reply = jdecode(reply)
+        if not reply["status"]:
+            CODES[internal_code]["status"] = False
+            CODES[internal_code]["actionlog"] = reply["log"]
+            CODES[internal_code]["delete"] = True
+        else:
+            effect_transaction(internal_code,reply["ref"],func, args, logfile, update_structure)
+    except:
+        CODES[internal_code]["status"] = False
+        CODES[internal_code]["actionlog"] = "Failed to reach finance server"
+
 
 
 # function to generate rado codes
@@ -406,11 +426,21 @@ def details():
             "total_returns": float,
             "available_balance": float,
             "total_redeems": float,
-            "commissions": [[float amount, str reason],...],
+            "commissions": [[str date, float amount, str reason],...],
             "leg_volumes": [float leg-1-volume, float leg-2-volume, float leg-3-volume],
-            "investments": [[str date, float points, str package, int package id, int months_returned, returns],...],
+            "investments": [
+                [
+                    str date, 
+                    float points, 
+                    str package, 
+                    int package id, 
+                    int months_returned, 
+                    float returns,
+                    float total_returns_at_investment_creation],
+                ...],
             "direct_children":[str child1_names, str child2_names,.....] /* names NOT ids, again, its for 
                                                                             for security reasons */
+            "withdraws":[[str date, float amount],...]
         }
     
     """
@@ -864,6 +894,69 @@ def transfer_funds_to_client_jpesa_account():
 
     return reply_to_remote(jencode(reply))
 
+@app.route("/transfer_funds_to_mobile_money", methods=["POST"])
+def transfer_funds_from_jpesa_to_mobile_money():
+    " if returned json <status> key is true, all went well, otherwise, check <log>"
+
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    
+    if json_req:
+        account_id = json_req.get("id", -1)
+        amount = json_req.get("amount", -1)
+        number = str(json_req.get("number", ""))
+
+    else:
+        account_id = request.form.get("id",-1)
+        amount = request.form.get("amount", -1)
+        number = str(request.form.get("number", ""))
+
+        try:
+            account_id = int(account_id)
+            amount = float(amount)
+        except:
+            reply["log"] = "silly form data provided"
+            return reply_to_remote(jencode(reply))
+            
+    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+        reply["log"] = "silly data provided; parameter <account_id>"
+        return reply_to_remote(jencode(reply))
+    if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
+        reply["log"] = "silly data provided; parameter <amount>"
+        return reply_to_remote(jencode(reply))
+    if not number:
+        reply["log"] = "silly data provided; parameter <number>"
+        return reply_to_remote(jencode(reply))
+
+
+    logfile = file_path("{}{}.fundstransfertoMM".format(account_id,amount))
+
+    if libghfu.redeem_account_points(account_id, amount, 1, logfile):
+        rm(logfile)
+        new_internal_code = get_random_code()
+        CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+
+        er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+        wc = c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value
+        ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+        
+        threading.Thread(target=transfer_funds_to_mobile_money, 
+            args=(new_internal_code,number, amount*(er-ri)*(100-wc)/100., 
+                libghfu.redeem_account_points, (account_id, amount, 0, logfile)),
+            kwargs={"logfile":logfile, "update_structure":True}).start()
+        
+        reply["status"] = True
+        reply["code"] = new_internal_code
+    else:
+        reply["log"] = info(logfile)
+        rm(logfile)
+
+    return reply_to_remote(jencode(reply))
+
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
@@ -874,6 +967,7 @@ if __name__=="__main__":
         libghfu.register_new_member(0, "PSEUDO-ROOT",
             c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
             c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value,
+            0,
             file_path("pseudo-root"))
         print "created pseudo-root account to be used (no saved data found!)"
     else:

@@ -16,12 +16,12 @@ bool GLOCK_INITIALISED = false;
 
 float POINT_FACTOR = 0.25;
 unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent in some months...) */
-unsigned int LAST_INVESTMENT_DAY = 5; /* we can only get investment money on so many days in a given month */
+unsigned int LAST_INVESTMENT_DAY = 14; /* we can only get investment money on so many days in a given month */
 
 /* account fees($) they sohuld tally up to $400.0*/
-float ACCOUNT_CREATION_FEE = 40.0; /* $ */
-float ANNUAL_SUBSCRIPTION_FEE = 10.0; /* $ */
-float OPERATIONS_FEE = 350.0; /* $ */
+float ACCOUNT_CREATION_FEE = 12.0; /* $ */
+float ANNUAL_SUBSCRIPTION_FEE = 0.0; /* $ */
+float OPERATIONS_FEE = 400.0; /* $ */
 
 float MINIMUM_INVESTMENT = 300.0; /* 75 points */
 float MAXIMUM_INVESTMENT = 700.0; /* 175 points */
@@ -69,6 +69,9 @@ char *ERRORS[] = {
     /*18*/ "INVESTMENTS ARE DESCRET AND SET TO ONLY A FEW SPECIFIC VALUES. INQUIRE WITH ADMIN ABOUT THIS!",
     /*19*/ "TODAY IS PAST THE LAST INVESTMENT DAY. CONSULT WITH ADMIN ABOUT THIS PLEASE",
     /*20*/ "FAILED TO GIVE MONTHY-RANK-BONUSES. NOT PAYMENT DAY",
+    /*21*/ "TOTAL RETURNS SINCE INVESTMENT EXCEED MAXIMUM PROFIT ALLOWED FOR INVESTMENT",
+    /*22*/ "RETURNS TRANCATED TO NOT EXCEED MAXIMUM ALLOWABLE INVESTMENT PROFIT",
+    /*23*/ "RETURNS TOPPED UP TO AQUIRE MINIMUM ALLOWABLE INVESTMENT PROFIT",
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
@@ -102,8 +105,8 @@ char *RANKS[] = {
     /*6*/ "Senior Director",
     /*7*/ "Executive Director",
     /*8*/ "Senior Executive Director",
-    /*9*/ "Presidential Director",
-    /*10*/ "Senior Presidential Director",
+    /*9*/ "President",
+    /*10*/ "Chairman",
     /*11*/ "Crown",
     /*12*/ "\0", /* termination condition*/
 };
@@ -114,14 +117,14 @@ float RANK_DETAILS[][4] = {
          
     */
     /*0*/  {0,  0,    0,        0},
-    /*1*/  {0,  100,  1000,     0},
-    /*2*/  {0,  100,  3000,     0},
+    /*1*/  {0,  60,  1000,     0},
+    /*2*/  {0,  80,  3000,     0},
     /*3*/  {0,  100,  10000,    0},
-    /*4*/  {0,  100,  30000,    0},
-    /*5*/  {0,  200,  100000,   500},
-    /*6*/  {0,  200,  300000,   1000},
-    /*7*/  {0,  200,  1000000,  2500},
-    /*8*/  {7,  0,    0,        6000},
+    /*4*/  {0,  120,  30000,    0},
+    /*5*/  {0,  140,  100000,   500},
+    /*6*/  {0,  160,  300000,   1000},
+    /*7*/  {0,  180,  1000000,  2500},
+    /*8*/  {7,  200,    0,        6000},
     /*9*/  {8,  0,    0,        15000},
     /*10*/ {9,  0,    0,        25000},
     /*11*/ {10, 0,    0,        50000},
@@ -133,29 +136,29 @@ float RANK_DETAILS[][4] = {
 
 float IBC[][2] = { /* independent-brocker-commissions/discounts */
     /* array-values are in format {PV+, %discount/commission} */
-    {0, 5},
-    {120, 10},
-    {200, 10},
-    {350, 10},
+    {0, 2},
+    {70, 5},
+    {120, 5},
+    {170, 5},
     {0, 0} /* terminating condition */
 };
 
-float INVESTMEN_SCHEME[][3] = {
-    /* array-values are in format {points+, %lowest, %highest} 
+float INVESTMEN_SCHEME[][5] = {
+    /* array-values are in format {points+, %lowest, %highest, %min-profit-returns, %max-profit-returns} 
        the data is in descending investment-points order
     */
-    {175, 40, 90},
-    {125, 40, 87},
-    {75, 40, 85},
-    {0, 0, 0} /* terminating condition */
+    {175, 40, 90, 10, 20},
+    {125, 40, 95, 20, 30},
+    {75, 40, 100, 30, 40},
+    {0, 0, 0, 0, 0} /* terminating condition */
 };
 
 float FSB[][2] = { /* Fast-Start-Bonus */
     /* array-values are in format {PV+, %commission} */
-    {0, 3},
-    {120, 4},
-    {250, 6},
-    {350, 8},
+    {0, 5},
+    {70, 10},
+    {120, 15},
+    {170, 20},
     {0, 0} /* terminating condition */
 };
 
@@ -166,9 +169,9 @@ float TBB[][TBB_MAX_GENERATIONS+1] = { /* Team-Building-Bonus */
     /* the terminating condition is TBB_MAX_GENERATIONS for any array(except the last array) */
     
     {0,.5,.5,0,0,0,0,0},
-    {120,.5,.5,.5,.5,0,0,0},
-    {200,.5,.5,.5,.5,.5,0,0},
-    {350,.5,.5,.5,.5,.5,.5,.5},
+    {70,.5,.5,.5,.5,0,0,0},
+    {120,.5,.5,.5,.5,.5,0,0},
+    {170,.5,.5,.5,.5,.5,.5,.5},
     {0, 0} /* terminating condition */
 };
 
@@ -181,30 +184,13 @@ float TVC[][2] = { /* Team-Volume-Commissions */
     */
     /* array-values are in format {PV+, %lesser-leg-commission} */
     {0, 2},
-    {120, 3},
-    {200, 4},
-    {350, 5},
+    {70, 3},
+    {120, 4},
+    {170, 5},
     {0, 0} /* terminating condition */
 };
 
-typedef struct director 
-{
-    char *title;
-    float award;
-} Director;
-
-Director DRCA[] = { /* DIRECTOR'S RECOGNITION CASH AWARD */
-    {"Director", 500},
-    {"Senior Director", 1000},
-    {"Executive Director", 2500},
-    {"Senior Executive Director", 6000},
-    {"Presidential Director", 15000},
-    {"Senior Presidential Director", 25000},
-    {"Crown", 50000},
-    {"END", 0}, /* terminating condition */
-};
-
 /* all the bonuses below are in %*/
-float HOB = .05; /* home-office-bonus */
-float LCB = .05; /* laxury-car-bonus */
+float HOB = .1; /* home-office-bonus */
+float LCB = .1; /* laxury-car-bonus */
 float EAB = .03; /* expense-account-bonus */

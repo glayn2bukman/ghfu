@@ -106,7 +106,7 @@ def deposit(number, amount, code):
     return reply
 
 def transfer_funds(email, amount, code):
-    "deposit money from mobile money number to jpesa account"
+    "deposit money from jpesa account to another jpesa account"
     
     reply = {"status":False, "log":""}
 
@@ -153,6 +153,59 @@ def transfer_funds(email, amount, code):
 
     return reply
 
+def transfer_funds_to_mobile_money(number, amount, code):
+    "deposit funds from jpesa account to mobile-money account"
+        
+    reply = {"status":False, "log":""}
+
+    if code!=finance_server_code:
+        reply["log"] = "wrong finance-code given. operation dumped"
+        return reply
+
+    if not (isinstance(number, str) or isinstance(number, unicode)):
+        reply["log"] = "invalid phone number given. numbers should be strings in format 07********"
+        return reply
+    
+    number = str(number) # just incase its in unicode
+    
+    if len(number)!=10 or number[:2]!="07":
+        reply["log"] = "invalid phone number given. numbers should be in format 07******** with length 10"
+        return reply
+
+    if not (isinstance(amount,int) or isinstance(amount,float)):
+        reply["log"] = "invalid amount given. expects a numeric value"
+        return reply
+    
+    amount = int(amount)
+    
+    if amount<1000:
+        reply["log"] = "amount must be SHS 1,000+"
+        return reply
+    
+    try:
+        _reply = requests.post(jpesa_url,
+            data = {
+                "command":"jpesa",
+                "action":"withdraw",
+                "username":jpesa_uname,
+                "password":jpesa_pswd,
+                "number":number,
+                "amount":amount
+                }
+        ).text
+        
+        if "ERROR" in _reply:
+            reply["log"] = _reply[_reply.index("]")+1:].strip()
+        else:
+            reply["status"] = True
+            reply["ref"] = _reply[_reply.index("|")+1:].strip()
+        
+    except:
+        reply["log"] = "network or url down. if not, you entered an invalid number or amount"
+
+    return reply
+
+# print transfer_funds_to_mobile_money("0701717554", 1500, finance_server_code)
 
 def check_transaction(ref, code):
     "check the status of a transaction"
@@ -188,6 +241,9 @@ def check_transaction(ref, code):
         reply["log"] = "network or url down. if not, you entered an invalid number or amount"
 
     return reply
+
+# print check_transaction("39DDE5FA2AF0CBA9D1BD15B304333DA1", finance_server_code)
+# print check_transaction("54381", finance_server_code)
 
 # actual server code...
 from flask import Flask, request, Response
@@ -262,6 +318,35 @@ def transfer_funds_to_jpesa():
     code = json_req.get("code","")
     
     reply = transfer_funds(email,amount,code)
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/transfer_funds_to_mobile_money", methods=["POST"])
+def transfer_funds_from_jpesa_to_mobile_money():
+    """
+    the function calling this url in the main server should thread it and simply return after calling
+    it as this function could hang in a network trying to reach jpesa. 
+    
+    also, the calling function should return a code to its caller (in the web) so that it can connect
+    this code to the transaction reference that will be returned from here. this will simplify the process
+    of the web-caller determining if the process was sucessfull 
+    """
+
+    if request.access_route[-1]!="127.0.0.1":
+        return reply_to_remote("You are not authorized to perform this operation!"),401
+    
+    reply = {"status":False, "log":""}
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expects json payload!"
+        return reply_to_remote(jencode(reply))
+    
+    number = json_req.get("number","")
+    amount = json_req.get("amount",0)
+    code = json_req.get("code","")
+    
+    reply = transfer_funds_to_mobile_money(number,amount,code)
     
     return reply_to_remote(jencode(reply))
 

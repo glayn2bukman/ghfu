@@ -49,8 +49,19 @@ typedef unsigned int bool;
 enum {false, true};
 
 
+typedef struct withdraw
+{
+    time_t date;
+    Amount amount;
+
+    struct withdraw *next;
+    struct withdraw *prev;
+
+} *Withdraw;
+
 typedef struct commission
 {
+    time_t date;
     String reason;
     Amount amount;
 
@@ -69,6 +80,9 @@ typedef struct investment
 
     Amount returns;
     unsigned int months_returned; /* 0-12, stop giving returns after this value==12 */
+
+    Amount total_returns_on_creation;
+    bool skipped_first_payment_day;
 
     struct investment *next;
     struct investment *prev;
@@ -109,6 +123,9 @@ typedef struct account
 
     Investment investments;
     Investment last_investment;
+
+    Withdraw withdraws;
+    Withdraw last_withdraw;
 
     unsigned int rank;
     unsigned int highest_leg_ranks[3];
@@ -153,6 +170,7 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout);
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
 void show_investments(const Account account);
+void show_withdraws(const Account account);
 void show_direct_children(const Account account);
 void structure_details(const Account account); 
 
@@ -160,6 +178,7 @@ void structure_details(const Account account);
 bool dump_commissions(const Account account, FILE *fout);
 bool dump_leg_volumes(const Account account, FILE *fout);
 bool dump_investments(const Account account, FILE *fout);
+bool dump_withdraws(const Account account, FILE *fout);
 bool dump_direct_children(const Account account, FILE *fout);
 bool dump_structure_details(ID account_id, String fout_name); 
 
