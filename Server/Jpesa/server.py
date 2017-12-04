@@ -126,7 +126,8 @@ def transfer_funds(email, amount, code):
     
     amount = int(amount)
     
-    if amount<1000:
+    if amount<1000: # this is the jpesa condition but GHFU has its own that the main server enforces before
+                    # is even calls this server
         reply["log"] = "amount must be SHS 1,000+"
         return reply
     
@@ -178,7 +179,8 @@ def transfer_funds_to_mobile_money(number, amount, code):
     
     amount = int(amount)
     
-    if amount<1000:
+    if amount<1000: # this is the jpesa condition but GHFU has its own that the main server enforces before
+                    # is even calls this server
         reply["log"] = "amount must be SHS 1,000+"
         return reply
     

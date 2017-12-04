@@ -96,7 +96,8 @@ jdecode = json.JSONDecoder().decode
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
 TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
-JPESA_DEPOSIT_CHARGES = .03
+JPESA_DEPOSIT_CHARGES = .03  # also applies when tranfering funds from jpesa to jpesa
+JPESA_WITHDRAW_CHARGES = 500.0
 
 CODES = {} # every time a random code is generated, its stored here to hold transaction data
            # so when the client wants to know about the state of a transaction, i dont querry the 
@@ -105,6 +106,11 @@ CODES = {} # every time a random code is generated, its stored here to hold tran
            # the server would end up consuming GBs of memory holding un-needed data!
 
 FILE_NOT_FOUND = "failed to access file. is account signed in multiple times"
+
+
+MINIMUM_WITHDRAW = float(JPESA_WITHDRAW_CHARGES)/(
+    c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value*.01*c_int.in_dll(libghfu, "EXCHANGE_RATE").value)
+MINIMUM_WITHDRAW = int(MINIMUM_WITHDRAW)+1
 
 # remove used uncessesary file
 def rm(f):
@@ -141,7 +147,7 @@ def client_known(addr):
 
 # define function to auto-update the exchange rate every half-day
 def fetch_current_exchange_rate():
-    global EXCHANGE_RATE
+    global MINIMUM_WITHDRAW
     exchange_rate_url = "http://usd.fxexchangerate.com/ugx/"
     
     while 1:
@@ -167,6 +173,11 @@ however, this value just is suspicious and we aint gonna use it!".format(value))
                 else:
                     if not libghfu.set_constant("exchange-rate", value):
                         server_log("failed to set exchange-rate to {}".format(value))
+
+                    MINIMUM_WITHDRAW = float(JPESA_WITHDRAW_CHARGES)/(
+                        c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value*.01*c_int.in_dll(libghfu, "EXCHANGE_RATE").value)
+                    MINIMUM_WITHDRAW = int(MINIMUM_WITHDRAW)+1
+
 
                     threading.Thread(target=libghfu.dump_constants, args=(
                         os.path.join(path,"lib"), os.path.join(path,"files","saves")
@@ -547,7 +558,7 @@ def get_data_constants():
     """ return data constants ie;
         POINT_FACTOR,PAYMENT_DAY,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,
         OPERATIONS_FEE,MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,LAST_INVESTMENT_DAY,
-        EXCHANGE_RATE, WITHDRAW_CHARGE,RATE_INFLATE
+        EXCHANGE_RATE, WITHDRAW_CHARGE,RATE_INFLATE, MINIMUM_WITHDRAW
     """
 
     if not client_known(request.access_route[-1]): 
@@ -566,6 +577,7 @@ def get_data_constants():
     reply["exchange-rate"] = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
     reply["withdraw-charge"] = c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value
     reply["rate-inflate"] = c_int.in_dll(libghfu, "RATE_INFLATE").value
+    reply["minimum-withdraw"] = MINIMUM_WITHDRAW
 
     return reply_to_remote(jencode(reply))
 
@@ -609,6 +621,11 @@ def set_data_constants():
                 )).start()
 
             break
+
+    global MINIMUM_WITHDRAW
+    MINIMUM_WITHDRAW = float(JPESA_WITHDRAW_CHARGES)/(
+        c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value*.01*c_int.in_dll(libghfu, "EXCHANGE_RATE").value)
+    MINIMUM_WITHDRAW = int(MINIMUM_WITHDRAW)+1
 
     return reply_to_remote(jencode(reply))
 
@@ -868,6 +885,9 @@ def transfer_funds_to_client_jpesa_account():
     if not email:
         reply["log"] = "silly data provided; parameter <email>"
         return reply_to_remote(jencode(reply))
+    if amount<MINIMUM_WITHDRAW:
+        reply["log"] = "withdraw less than minimum of ${}".format(MINIMUM_WITHDRAW)
+        return reply_to_remote(jencode(reply))
 
 
     logfile = file_path("{}{}.fundstransfer".format(account_id,amount))
@@ -882,7 +902,7 @@ def transfer_funds_to_client_jpesa_account():
         ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
         
         threading.Thread(target=transfer_funds_to_other_jpesa_account, 
-            args=(new_internal_code,email, amount*(er-ri)*(100-wc)/100., 
+            args=(new_internal_code,email, amount*(er-ri)*(100-wc+(JPESA_DEPOSIT_CHARGES*100))/100., 
                 libghfu.redeem_account_points, (account_id, amount, 0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         
@@ -931,7 +951,9 @@ def transfer_funds_from_jpesa_to_mobile_money():
     if not number:
         reply["log"] = "silly data provided; parameter <number>"
         return reply_to_remote(jencode(reply))
-
+    if amount<MINIMUM_WITHDRAW:
+        reply["log"] = "withdraw less than minimum of ${}".format(MINIMUM_WITHDRAW)
+        return reply_to_remote(jencode(reply))
 
     logfile = file_path("{}{}.fundstransfertoMM".format(account_id,amount))
 
@@ -945,7 +967,7 @@ def transfer_funds_from_jpesa_to_mobile_money():
         ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
         
         threading.Thread(target=transfer_funds_to_mobile_money, 
-            args=(new_internal_code,number, amount*(er-ri)*(100-wc)/100., 
+            args=(new_internal_code,number, JPESA_WITHDRAW_CHARGES+(amount*(er-ri)*(100-wc)/100.), 
                 libghfu.redeem_account_points, (account_id, amount, 0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         
