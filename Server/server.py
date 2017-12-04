@@ -53,6 +53,12 @@ try:
         finance_server_code = finance_code_file.read().strip()
 except: sys.exit("cant find finance server code file ({})".format(os.path.join(data_path,".finance_code")))
 
+try:
+    with open(os.path.join(data_path,".monthly_operations_code"),"r") as monthly_operations_file:
+        monthly_operations_code = monthly_operations_file.read().strip()
+except: sys.exit("cant find monthly operations code file ({})".format(os.path.join(data_path,".finance_code")))
+
+
 from ctypes import *
 
 
@@ -769,7 +775,7 @@ def perform_monthly_operations():
         
     ID = json_req.get("id", "")
 
-    if (not ID) or ID!="5892cdfWTCSDFEWW8965432":
+    if (not ID) or ID!=monthly_operations_code:
         return reply_to_remote("You are not authorised to perform this operation!"),401
 
     pd = c_int.in_dll(libghfu, "PAYMENT_DAY").value
