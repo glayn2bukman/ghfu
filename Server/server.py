@@ -184,6 +184,9 @@ however, this value just is suspicious and we aint gonna use it!".format(value))
                         c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value*.01*c_int.in_dll(libghfu, "EXCHANGE_RATE").value)
                     MINIMUM_WITHDRAW = int(MINIMUM_WITHDRAW)+1
 
+                    threading.Thread(target=libghfu.save_structure, args=(
+                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
+                        )).start()
 
                     threading.Thread(target=libghfu.dump_constants, args=(
                         os.path.join(path,"lib"), os.path.join(path,"files","saves")
@@ -485,16 +488,17 @@ def details():
         return reply_to_remote(jencode(reply))
     
     jsonfile = os.path.join(path, "files","json","{}.json".format(account_id))
-        
+    
     if libghfu.dump_structure_details(account_id, jsonfile):
         try:
             with open(jsonfile, "r") as f: reply = f.read()
-            rm(jsonfile)
         except:
             reply["log"] = "failed to access json file. is account signed in multiple times"
     else:
         reply["log"] = "no account matching requested target!"
         reply = jencode(reply)
+
+    rm(jsonfile)
     
     return reply_to_remote(reply)
 
@@ -993,8 +997,7 @@ if __name__=="__main__":
     if libghfu.account_id(libghfu.get_account_by_id(1))==0:
         # create contemporary member...to act as first member in case theere are no members yet in structure
         libghfu.register_new_member(0, "PSEUDO-ROOT",
-            c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value + 
-            c_float.in_dll(libghfu, "ANNUAL_SUBSCRIPTION_FEE").value,
+            c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value,
             0,
             file_path("pseudo-root"))
         print "created pseudo-root account to be used (no saved data found!)"

@@ -11,9 +11,9 @@ SERVER = "0.0.0.0", 54321
 
 data = (
     ("register",
-        {"uplink":1,"names":"test {}", "deposit":1500}),
+        {"uplink":1,"names":"test {}", "deposit":1500, "number":"0000000000"}),
     ("buy_package", 
-        {"IB_id":1, "amount":1000, "buyer_is_member":True, "buyer_names":"buyer {}"}),
+        {"Iid":1, "amount":1000}),
     ("details", 
         {"id":1})
 )
