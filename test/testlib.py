@@ -7,7 +7,7 @@ root = os.path.split(os.path.split(root)[0])[0]
 fout = os.path.join(root,"test","log")
 jout = os.path.join(root,"test","json")
 
-libghfu = CDLL(os.path.join(root,"lib","libjermGHFU.so"))
+libghfu = CDLL("libjermGHFU.so")
 
 libghfu.init(os.path.join(root,"lib"), os.path.join(root,"test"))
 

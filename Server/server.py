@@ -61,8 +61,7 @@ except: sys.exit("cant find monthly operations code file ({})".format(os.path.jo
 
 from ctypes import *
 
-
-libghfu = CDLL(os.path.join(path,"lib","libjermGHFU.so"))
+libghfu = CDLL("libjermGHFU.so")
 
 # define libghfu function argtypes (so that we can call them normally and let ctypes do any type conversions)
 libghfu.invest.argtypes = [c_long, c_float, c_int, c_int, c_char_p]
