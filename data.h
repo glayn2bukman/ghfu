@@ -19,7 +19,7 @@ unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent 
 unsigned int LAST_INVESTMENT_DAY = 14; /* we can only get investment money on so many days in a given month */
 
 /* account fees($) they sohuld tally up to $400.0*/
-float ACCOUNT_CREATION_FEE = 12.0; /* $ */
+float ACCOUNT_CREATION_FEE = 16.0; /* $ */
 float ANNUAL_SUBSCRIPTION_FEE = 0.0; /* $ */
 float OPERATIONS_FEE = 400.0; /* $ */
 
@@ -117,14 +117,14 @@ float RANK_DETAILS[][4] = {
          
     */
     /*0*/  {0,  0,    0,        0},
-    /*1*/  {0,  60,  1000,     0},
-    /*2*/  {0,  80,  3000,     0},
+    /*1*/  {0,  60,   1000,     0},
+    /*2*/  {0,  80,   3000,     0},
     /*3*/  {0,  100,  10000,    0},
     /*4*/  {0,  120,  30000,    0},
     /*5*/  {0,  140,  100000,   500},
     /*6*/  {0,  160,  300000,   1000},
     /*7*/  {0,  180,  1000000,  2500},
-    /*8*/  {7,  200,    0,        6000},
+    /*8*/  {7,  0,    0,        6000},
     /*9*/  {8,  0,    0,        15000},
     /*10*/ {9,  0,    0,        25000},
     /*11*/ {10, 0,    0,        50000},
@@ -158,7 +158,7 @@ float FSB[][2] = { /* Fast-Start-Bonus */
     {0, 5},
     {70, 10},
     {120, 15},
-    {170, 20},
+    {170, 18},
     {0, 0} /* terminating condition */
 };
 

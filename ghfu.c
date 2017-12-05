@@ -148,6 +148,7 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
     pthread_mutex_lock(&glock);
     
     account->pv += points;
+    raise_rank(account, fout);
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
        this dramatically reduces the time needed to calculate the TVCs and all other TEAM-volume related 
@@ -156,7 +157,7 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
        also, increment ranks for all liable members in that linear tree!
     */
 
-    Account acc = account;
+    Account acc = account->uplink;
     
     pthread_mutex_unlock(&glock);
 
@@ -283,7 +284,7 @@ bool award_commission(Account account, Amount points, String commission_type, St
         
         p_comm = (IBC[i][1]/100)*points;
         
-        update_pv = true;        
+        //update_pv = true;        
     }
     else if(!strcmp(commission_type, "DRA")) {p_comm = points;} /*director's recorgnition award*/    
     else if(!strcmp(commission_type, "HOB")) {p_comm = HOB*0.01*points;}    
@@ -748,7 +749,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
         gfree(new_account);
         return NULL;
     }
-    if(points>0) award_commission(new_account, points,"TBB","", fout);
+    if(points>0) award_commission(new_account, (amount-OPERATIONS_FEE)*POINT_FACTOR,"TBB","", fout);
 
     ap->account = new_account;
     ap->next = NULL;
@@ -810,6 +811,8 @@ bool buy_property(Account IB_account, Amount amount, bool test_feasibility, FILE
             join_strings(c_reason, c_reason_strings);
             award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
         }
+
+        award_commission(IB_account, points,"TBB","", fout);
 
         increment_pv(IB_account,points,fout);
 
@@ -911,8 +914,9 @@ bool auto_refill(Account account, FILE *fout)
                     
                     returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
 
-                    min_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][3])*.01*12;
-                    max_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][4])*.01*12;
+                    min_accaptable_returns = ((inv->amount/POINT_FACTOR)+OPERATIONS_FEE)*(100+INVESTMEN_SCHEME[i][3])*.01;
+                    max_accaptable_returns = ((inv->amount/POINT_FACTOR)+OPERATIONS_FEE)*(100+INVESTMEN_SCHEME[i][4])*.01;
+                                        
                     accumulated_returns_since_investment = account->total_returns - inv->total_returns_on_creation;
 
                     // here, scenario represents the error to reflect
@@ -1042,8 +1046,8 @@ bool auto_refill(Account account, FILE *fout)
                     
                     returns = (inv->amount)*(MONTHLY_AUTO_REFILL_PERCENTAGES[i][1])*.01;
 
-                    min_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][3])*.01*12;
-                    max_accaptable_returns = (inv->amount)*(100+INVESTMEN_SCHEME[i][4])*.01*12;
+                    min_accaptable_returns = ((inv->amount/POINT_FACTOR)+OPERATIONS_FEE)*(100+INVESTMEN_SCHEME[i][3])*.01;
+                    max_accaptable_returns = ((inv->amount/POINT_FACTOR)+OPERATIONS_FEE)*(100+INVESTMEN_SCHEME[i][4])*.01;
                     accumulated_returns_since_investment = acc->total_returns - inv->total_returns_on_creation;
 
                     // here, scenario represents the error to reflect
@@ -1179,21 +1183,20 @@ bool raise_rank(Account account, FILE *fout)
     
     while((RANK_DETAILS[rank][1]!=1) && ++rank)
     {
-        if(!(
-                ((account->highest_leg_ranks[0]>=RANK_DETAILS[rank][0]) ||
-                (account->highest_leg_ranks[1]>=RANK_DETAILS[rank][0]) ||
-                (account->highest_leg_ranks[2]>=RANK_DETAILS[rank][0])) 
-                
-                &&
-
-                (account->pv>=RANK_DETAILS[rank][1]) 
-                
-                &&
-                
-                ((account->leg_volumes[0]+account->leg_volumes[1] +
-                    account->leg_volumes[2])>=RANK_DETAILS[rank][2])
-
-        )) {--rank; break;}
+        if (account->rank<=8)
+        {
+            if(!(
+                (account->pv + account->leg_volumes[0] + account->leg_volumes[1] +
+                account->leg_volumes[2]) >= RANK_DETAILS[rank][2]
+            )) {--rank; break;}
+        }
+        else
+        {
+            if (!((account->highest_leg_ranks[0]>=RANK_DETAILS[rank][0])
+                || (account->highest_leg_ranks[1]>=RANK_DETAILS[rank][0])
+                || (account->highest_leg_ranks[2]>=RANK_DETAILS[rank][0])
+            )){--rank; break;}
+        }
     }
 
     rank = rank==12 ? --rank : rank;
@@ -2164,7 +2167,8 @@ void structure_details(const Account account)
         printf("  Total Redeemed = $%.2lf\n",account->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             account->leg_volumes[0],account->leg_volumes[1],account->leg_volumes[2]);
-
+        printf("  Rank: %s\n",RANKS[account->rank]);
+        
         pthread_mutex_unlock(&glock);
         
         show_investments(account);
@@ -2195,6 +2199,7 @@ void structure_details(const Account account)
         printf("  Total Redeemed = $%.2lf\n",acc->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             acc->leg_volumes[0],acc->leg_volumes[1],acc->leg_volumes[2]);
+        printf("  Rank: %s\n",RANKS[acc->rank]);
         
         pthread_mutex_unlock(&glock);
 
