@@ -251,7 +251,7 @@ bool award_commission(Account account, Amount points, String commission_type, St
     
     bool update_pv = false;
     
-    if(!strcmp(commission_type,"FSB"))
+    if(!strcmp(commission_type,"QSB"))
     {
         /* fast start bonus (whenver a new member joins)*/
         int i=0;
@@ -305,9 +305,9 @@ bool award_commission(Account account, Amount points, String commission_type, St
         
         Commission last_commission;
         
-        while((generation<TBB_MAX_GENERATIONS) && (uplink!=NULL))
+        while((generation<=TBB_MAX_GENERATIONS) && (uplink!=NULL))
         /* the 2 conditions are arranged in that order for a reason; when we have a sufficiently large 
-           structure, its mch more likely that we shall reach the generation<7 barrier of TBBs before
+           structure, its mch more likely that we shall reach the generation<=7 barrier of TBBs before
            we reach the root node for that given lineage!
         */
         {
@@ -572,11 +572,11 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     if (account->uplink!=NULL)
     {
-        String c_reason_strings[] = {"FSB from ", account->names,"'s investment", "\0"};
+        String c_reason_strings[] = {"QSB from ", account->names,"'s investment", "\0"};
         length_of_all_strings(c_reason_strings, &buff_length);
         char c_reason[buff_length+1];
         join_strings(c_reason, c_reason_strings);
-        award_commission(account->uplink,points,"FSB",c_reason, fout);
+        award_commission(account->uplink,points,"QSB",c_reason, fout);
     }
 
     if(update_system_float)
@@ -805,11 +805,11 @@ bool buy_property(Account IB_account, Amount amount, bool test_feasibility, FILE
 
         if (IB_account->uplink!=NULL)
         {
-            String c_reason_strings[] = {"FSB from ", IB_account->names,"'s package purchase", "\0"};
+            String c_reason_strings[] = {"QSB from ", IB_account->names,"'s package purchase", "\0"};
             length_of_all_strings(c_reason_strings, &buff_length);
             char c_reason[buff_length+1];
             join_strings(c_reason, c_reason_strings);
-            award_commission(IB_account->uplink,points,"FSB",c_reason, fout);
+            award_commission(IB_account->uplink,points,"QSB",c_reason, fout);
         }
 
         award_commission(IB_account, points,"TBB","", fout);
@@ -2161,12 +2161,15 @@ void structure_details(const Account account)
         printf("\n%s\n",account->names);
         printf("  ID: %ld\n",account->id);
         printf("  Uplink: %s\n", account->uplink==NULL ? "ROOT" : account->uplink->names);
-        printf("  PV = %.2lf points\n",account->pv);
+        printf("  CPV = %.2lf points\n",account->pv);
         printf("  Total Returns = $%.2lf\n",account->total_returns);
         printf("  Available Balance = $%.2lf\n",account->available_balance);
         printf("  Total Redeemed = $%.2lf\n",account->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             account->leg_volumes[0],account->leg_volumes[1],account->leg_volumes[2]);
+        printf("  Cummulative Organisation Volume: %.f points\n",
+            account->pv+account->leg_volumes[0]+account->leg_volumes[1]+account->leg_volumes[2]
+        );
         printf("  Rank: %s\n",RANKS[account->rank]);
         
         pthread_mutex_unlock(&glock);
@@ -2193,12 +2196,16 @@ void structure_details(const Account account)
         printf("\n%s\n",acc->names);
         printf("  ID: %ld\n",acc->id);
         printf("  Uplink: %s\n", acc->uplink==NULL ? "ROOT" : acc->uplink->names);
-        printf("  PV = %.2lf points\n",acc->pv);
+        printf("  CPV = %.2lf points\n",acc->pv);
         printf("  Total Returns = $%.2lf\n",acc->total_returns);
         printf("  Available Balance = $%.2lf\n",acc->available_balance);
         printf("  Total Redeemed = $%.2lf\n",acc->total_redeems);
         printf("  Leg Volumes = (%.2lf, %.2lf, %.2lf)\n",
             acc->leg_volumes[0],acc->leg_volumes[1],acc->leg_volumes[2]);
+        printf("  Cummulative Organisation Volume: %.f points\n",
+            acc->pv+acc->leg_volumes[0]+acc->leg_volumes[1]+acc->leg_volumes[2]
+        );
+
         printf("  Rank: %s\n",RANKS[acc->rank]);
         
         pthread_mutex_unlock(&glock);
@@ -2243,11 +2250,13 @@ bool dump_structure_details(ID account_id, String fname)
     /* personal info */
     fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
         "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f,"
-        "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"]",
+        "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"], \"COV\":%.2f",
         account->names, account->id, (account->uplink==NULL ? "ROOT" : account->uplink->names),
         account->pv,account->total_returns,account->available_balance,account->total_redeems,
         RANKS[account->rank], RANKS[account->highest_leg_ranks[0]], RANKS[account->highest_leg_ranks[1]],
-        RANKS[account->highest_leg_ranks[2]]);
+        RANKS[account->highest_leg_ranks[2]],
+        account->pv+account->leg_volumes[0]+account->leg_volumes[1]+account->leg_volumes[2]
+    );
 
     pthread_mutex_unlock(&glock);
 

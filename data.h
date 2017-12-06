@@ -148,8 +148,8 @@ float INVESTMEN_SCHEME[][5] = {
     /* array-values are in format {points+, %lowest, %highest, %min-profit-returns, %max-profit-returns} 
        the data is in descending investment-points order
     */
-    {175, 40, 90, 10, 20},
-    {125, 40, 95, 20, 30},
+    {175, 40, 90, 30, 35},
+    {125, 40, 95, 30, 37},
     {75, 40, 100, 30, 40},
     {0, 0, 0, 0, 0} /* terminating condition */
 };
@@ -173,7 +173,7 @@ float TBB[][TBB_MAX_GENERATIONS+1] = { /* Team-Building-Bonus */
     {70,.5,.5,.5,.5,0,0,0},
     {120,.5,.5,.5,.5,.5,0,0},
     {170,.5,.5,.5,.5,.5,.5,.5},
-    {0, 0} /* terminating condition */
+    {0, 0, 0, 0, 0, 0, 0, 0} /* terminating condition */
 };
 
 float TVC[][2] = { /* Team-Volume-Commissions */

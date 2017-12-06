@@ -73,7 +73,7 @@ int main()
 
 
     structure_details(NULL);
- 
+    dump_structure_details(b1->id, "test/test.json");
     
     return 0;
 }
