@@ -205,7 +205,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
     
     while 1:
         try:
-            reply = requests.post("http://0.0.0.0:{}/transaction_status".format(finance_server_port), 
+            reply = requests.post("http://0.0.0.0:{}/test_transaction_status".format(finance_server_port), 
                 json={"code":finance_server_code, "ref":reference}).text
             reply = jdecode(reply)
             if not reply["status"]:
@@ -275,7 +275,7 @@ def depost_funds_to_jpesa(internal_code, number, amount, func, args, logfile=Non
 
     """
     try:
-        reply = requests.post("http://0.0.0.0:{}/deposit".format(finance_server_port), 
+        reply = requests.post("http://0.0.0.0:{}/test_deposit".format(finance_server_port), 
                 json={"code":finance_server_code, "number":number, "amount":amount}).text
         reply = jdecode(reply)
         if not reply["status"]:
@@ -315,7 +315,7 @@ def transfer_funds_to_mobile_money(
     read the doctsring for function <depost_funds_to_jpesa> above to understand this logic
     """
     try:
-        reply = requests.post("http://0.0.0.0:{}/transfer_funds_to_mobile_money".format(finance_server_port), 
+        reply = requests.post("http://0.0.0.0:{}/test_transfer_funds_to_mobile_money".format(finance_server_port), 
                 json={"code":finance_server_code, "number":number, "amount":amount}).text
         reply = jdecode(reply)
         if not reply["status"]:

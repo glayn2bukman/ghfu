@@ -378,6 +378,165 @@ def check_jpesa_transaction_status():
 
     return reply_to_remote(jencode(reply))
 
+#
+#
+# strictly for martin's development
+#
+#
+import random
+@app.route("/test_transaction_status", methods=["POST"])
+def test_check_jpesa_transaction_status():
+    """
+    unlike /deposit above, this on should not branch off in the calling function in the main server.
+    rather, the main server function calling this url should block and actually wait for the message
+    coming from the jpesa api regarding the transaction in question 
+    """
+
+    if request.access_route[-1]!="127.0.0.1":
+        return reply_to_remote("You are not authorized to perform this operation!"),401
+    
+    reply = {"status":False, "log":""}
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expects json payload!"
+        return reply_to_remote(jencode(reply))
+    
+    ref = json_req.get("ref","")
+    code = json_req.get("code","")
+
+    rep = random.randint(0,10)
+    r = random.randint(0,10)
+    if rep<5:
+        reply["details"] = {"status":"pending", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
+    if rep%2:
+        reply["log"] = "No Record Matching Transaction ID"
+    else:
+        reply["status"] = True
+        reply["details"] = {"status":"complete", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
+
+    return reply_to_remote(jencode(reply))
+
+@app.route("/test_deposit", methods=["POST"])
+def test_deposit_funds_to_jpesa():
+    """
+    the function calling this url in the main server should thread it and simply return after calling
+    it as this function could hang in a network trying to reach jpesa. 
+    
+    also, the calling function should return a code to its caller (in the web) so that it can connect
+    this code to the transaction reference that will be returned from here. this will simplify the process
+    of the web-caller determining if the process was sucessfull 
+    """
+
+    if request.access_route[-1]!="127.0.0.1":
+        return reply_to_remote("You are not authorized to perform this operation!"),401
+    
+    reply = {"status":False, "log":""}
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expects json payload!"
+        return reply_to_remote(jencode(reply))
+    
+    number = json_req.get("number","")
+    amount = json_req.get("amount",0)
+    code = json_req.get("code","")
+    
+    if code!=finance_server_code:
+        reply["log"] = "wrong finance-code given. operation dumped"
+        return reply_to_remote(jencode(reply))
+
+    if not (isinstance(number, str) or isinstance(number, unicode)):
+        reply["log"] = "invalid phone number given. numbers should be strings in format 07********"
+        return reply_to_remote(jencode(reply))
+    
+    number = str(number) # just incase its in unicode
+    
+    if len(number)!=10 or number[:2]!="07":
+        reply["log"] = "invalid phone number given. numbers should be in format 07******** with length 10"
+        return reply_to_remote(jencode(reply))
+
+    if not (isinstance(amount,int) or isinstance(amount,float)):
+        reply["log"] = "invalid amount given. expects a numeric value"
+        return reply_to_remote(jencode(reply))
+    
+    amount = int(amount)
+    
+    if amount<500 or amount>4950000:
+        reply["log"] = "amount must be in the range SHS 1,000-4,950,000"
+        return reply_to_remote(jencode(reply))
+
+    rep = random.randint(0,10)
+    r = random.randint(0,10)
+    if rep%2:
+        reply["log"] = "SIMULATED-ERROR"
+    else:
+        reply["status"] = True
+        reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
+    
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/test_transfer_funds_to_mobile_money", methods=["POST"])
+def test_transfer_funds_from_jpesa_to_mobile_money():
+    """
+    the function calling this url in the main server should thread it and simply return after calling
+    it as this function could hang in a network trying to reach jpesa. 
+    
+    also, the calling function should return a code to its caller (in the web) so that it can connect
+    this code to the transaction reference that will be returned from here. this will simplify the process
+    of the web-caller determining if the process was sucessfull 
+    """
+
+    if request.access_route[-1]!="127.0.0.1":
+        return reply_to_remote("You are not authorized to perform this operation!"),401
+    
+    reply = {"status":False, "log":""}
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expects json payload!"
+        return reply_to_remote(jencode(reply))
+    
+    number = json_req.get("number","")
+    amount = json_req.get("amount",0)
+    code = json_req.get("code","")
+    
+    if code!=finance_server_code:
+        reply["log"] = "wrong finance-code given. operation dumped"
+        return reply_to_remote(jencode(reply))
+
+    if not (isinstance(number, str) or isinstance(number, unicode)):
+        reply["log"] = "invalid phone number given. numbers should be strings in format 07********"
+        return reply_to_remote(jencode(reply))
+    
+    number = str(number) # just incase its in unicode
+    
+    if len(number)!=10 or number[:2]!="07":
+        reply["log"] = "invalid phone number given. numbers should be in format 07******** with length 10"
+        return reply_to_remote(jencode(reply))
+
+    if not (isinstance(amount,int) or isinstance(amount,float)):
+        reply["log"] = "invalid amount given. expects a numeric value"
+        return reply_to_remote(jencode(reply))
+    
+    amount = int(amount)
+    
+    if amount<1000: # this is the jpesa condition but GHFU has its own that the main server enforces before
+                    # is even calls this server
+        reply["log"] = "amount must be SHS 1,000+"
+        return reply_to_remote(jencode(reply))
+
+    rep = random.randint(0,10)
+    r = random.randint(0,10)
+    if rep%2:
+        reply["log"] = "SIMULATED-ERROR"
+    else:
+        reply["status"] = True
+        reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
+    
+    return reply_to_remote(jencode(reply))
+
 
 if __name__=="__main__":
     app.run("0.0.0.0", 54322, threaded=1, debug=1)

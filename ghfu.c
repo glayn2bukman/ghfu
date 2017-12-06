@@ -2285,7 +2285,8 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
 
     //printf("redeem-points\n");
 
-    if(account==NULL){ghfu_warn(11,fout); return false;}
+    if(account==NULL) {ghfu_warn(11,fout); return false;}
+    if(account->id==1) {ghfu_warn(24,fout); return false;}
     if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
 
     if (test_feasibility) return true; /* no more checks, operation is feasible*/
