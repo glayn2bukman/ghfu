@@ -850,7 +850,7 @@ def check_transaction_status():
         reply["log"] = transaction_data["actionlog"]
     else:
         reply["status"]=True
-        reply["new-code"] = transaction_data["details"]["details"]["tid"][:8]
+        reply["new_code"] = transaction_data["details"]["details"]["tid"][:8]
 
     if transaction_data["delete"]:
         del(CODES[code])

@@ -846,11 +846,11 @@ def check_transaction_status():
     if "id" in transaction_data: # url /register
         reply["id"] = transaction_data["id"]
 
+    reply["status"] = transaction_data["status"]
     if not transaction_data["status"]:
         reply["log"] = transaction_data["actionlog"]
     else:
-        reply["status"]=True
-        reply["new-code"] = transaction_data["details"]["details"]["tid"][:8]
+        reply["new_code"] = transaction_data["details"]["details"]["tid"][:8]
 
     if transaction_data["delete"]:
         del(CODES[code])

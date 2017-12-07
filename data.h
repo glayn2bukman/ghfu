@@ -72,7 +72,7 @@ char *ERRORS[] = {
     /*21*/ "TOTAL RETURNS SINCE INVESTMENT EXCEED MAXIMUM PROFIT ALLOWED FOR INVESTMENT",
     /*22*/ "RETURNS TRANCATED TO NOT EXCEED MAXIMUM ALLOWABLE INVESTMENT PROFIT",
     /*23*/ "RETURNS TOPPED UP TO AQUIRE MINIMUM ALLOWABLE INVESTMENT PROFIT",
-    /*24*/ "THIS ACCOUNT BELONGS TO THE SYSTEM> YOU CANT REDEEM ITS POINTS",
+    /*24*/ "THIS ACCOUNT BELONGS TO THE SYSTEM. YOU CANT REDEEM ITS POINTS",
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
@@ -148,9 +148,9 @@ float INVESTMEN_SCHEME[][5] = {
     /* array-values are in format {points+, %lowest, %highest, %min-profit-returns, %max-profit-returns} 
        the data is in descending investment-points order
     */
-    {175, 40, 90, 30, 35},
-    {125, 40, 95, 30, 37},
-    {75, 40, 100, 30, 40},
+    {175, 40, 90, 15, 30},
+    {125, 40, 95, 15, 30},
+    {75, 40, 100, 15, 30},
     {0, 0, 0, 0, 0} /* terminating condition */
 };
 
@@ -158,8 +158,8 @@ float FSB[][2] = { /* Fast-Start-Bonus */
     /* array-values are in format {PV+, %commission} */
     {0, 5},
     {70, 10},
-    {120, 15},
-    {170, 18},
+    {120, 13},
+    {170, 16},
     {0, 0} /* terminating condition */
 };
 

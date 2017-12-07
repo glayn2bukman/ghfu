@@ -4,7 +4,7 @@ int main()
 {
 	init("lib","test");
 
-    float ACF = 16.0, SAPHIRE=700, RUBY=900, DIAMOND=1100; /* account-creation-fee */
+    float ACF = 16.0, SAPHIRE=700, RUBY=900, DIAMOND=1100; // account-creation-fee 
 
     Account b1 = register_member(NULL, "B1",ACF+DIAMOND,false,stdout);
 
@@ -63,17 +63,20 @@ int main()
 
     };
 
-    /* now compute and award all monthy bonuses n commissions to all members for a full year*/
-    for(int i=0; i<13;++i) 
+    // now compute and award all monthy bonuses n commissions to all members for a full year
+    //for(int i=0; i<13;++i) 
         // monthly_operations(monhtly_auto_refill_percentages[i], stdout);
-    {
-        update_monthly_auto_refill_percentages(monhtly_auto_refill_percentages[i], "lib", "test");
-        monthly_operations(stdout);
-    }
+    //{
+    //    update_monthly_auto_refill_percentages(monhtly_auto_refill_percentages[i], "lib", "test");
+    //    monthly_operations(stdout);
+    //}
 
 
-    structure_details(NULL);
+    structure_details(b1);
     dump_structure_details(b1->id, "test/test.json");
+
+    save_structure("lib","test");
+    dump_constants("lib","test");
     
     return 0;
 }

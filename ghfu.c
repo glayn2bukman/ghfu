@@ -2547,7 +2547,6 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     //printf("dump constants\n");
 
-
     bool status = false;
 
     pthread_mutex_lock(&glock);
@@ -2555,6 +2554,7 @@ bool dump_constants(String jermCrypt_path, String save_dir)
     unsigned int buff_length;
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
+    String jermCryptReply;
     
     length_of_all_strings(crypt_lib_paths, &buff_length);
     char crypt_lib_path[buff_length+1];
@@ -2602,8 +2602,16 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     fclose(fout);
     
-    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
-            
+    // encrypt file after writting data
+    if(strcmp(
+    jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true, false), "Ok"))
+    {
+        printf("<dump_constants> encrypting file: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }        
+    
     status = true;
 
     dlclose(libjermCrypt);
@@ -2629,6 +2637,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",DATA_FILE,"\0"};
+    String jermCryptReply;
     
     length_of_all_strings(crypt_lib_paths, &buff_length);
     char crypt_lib_path[buff_length+1];
@@ -2659,7 +2668,16 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fclose(fin);
 
-    //decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    // decrypt_data_file before reading from it...
+    if(strcmp(
+    jermCryptReply=decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
+    {
+        printf("<load_constants> decrypting file to read data: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }
+
 
     fin = fopen(data_file_path,"rb");
 
@@ -2703,7 +2721,15 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fclose(fin);
     
-    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    // encrypt data file when reading from it is done
+    if(strcmp(
+    jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
+    {
+        printf("<load_constants> encrypting file after reading data: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }
             
     status = true;
     dlclose(libjermCrypt);
@@ -2720,7 +2746,6 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     //printf("save structure\n");
 
-
     if(HEAD==NULL) return true; /* thereis nothing to save, so no error !*/
     
     bool status = false;
@@ -2731,6 +2756,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
+    String jermCryptReply;
     
     length_of_all_strings(crypt_lib_paths, &buff_length);
     char crypt_lib_path[buff_length+1];
@@ -2931,7 +2957,16 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
     fclose(fout);
     
-    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    // encrypt data after writting it
+    if(strcmp(
+    jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
+    {
+        printf("<save_structure> encrypting file: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }        
+
             
     status = true;
     dlclose(libjermCrypt);
@@ -2973,6 +3008,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     String data_file_paths[] = {save_dir, "/",STRUCTURE_FILE,"\0"};
+    String jermCryptReply;
     
     length_of_all_strings(crypt_lib_paths, &buff_length);
     char crypt_lib_path[buff_length+1];
@@ -3004,6 +3040,17 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     fclose(fin);
 
+    // decrypt data file before reading from it...
+    // decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+
+    if(strcmp(
+    jermCryptReply=decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
+    {
+        printf("<load_structure> decrypting file to read data: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }
 
     AccountPointer acc_p, p_acc_p; /* p_acc_p = prev ac_p */
     AccountPointer child, p_child; /* p_acc_p = prev ac_p */
@@ -3078,8 +3125,6 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
         TAIL = HEAD;
     }
-
-    //decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
 
     fin = fopen(data_file_path,"rb");
 
@@ -3486,7 +3531,16 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     fclose(fin);
     
-    //encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
+    // encrypt file adter reading from it
+    if(strcmp(
+    jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
+    {
+        printf("<load_structure> encrypting file after reading data: %s\n",jermCryptReply);
+        dlclose(libjermCrypt);
+        pthread_mutex_unlock(&glock);
+        return status;
+    }
+
             
     status = true;
     dlclose(libjermCrypt);
