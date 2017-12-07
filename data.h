@@ -7,6 +7,7 @@ char *JERM_CRYPT_LIB = "libjermCrypt.so";
 char *DATA_FILE = "data.ghfu";
 char *STRUCTURE_FILE = "structure.ghfu";
 char *JERM_CRYPT_PASSWORD = "j<ermG.hfuCrypt>";
+bool DATA_FILE_PRESENT=false;
 
 /* the global-lock checker (the GL ensures that we have a thread-safe program)*/
 bool GLOCK_INITIALISED = false;

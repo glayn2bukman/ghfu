@@ -56,6 +56,12 @@ void init(String jermCrypt_path, String save_dir)
 
     data_loaded = load_constants(jermCrypt_path, save_dir);
     
+    if (!data_loaded && DATA_FILE_PRESENT)
+    {
+        fprintf(stdout,"data file found but jermCrypt returned error. exitting system\n");
+        exit(3);
+    }
+    
     if(!data_loaded)
     {
         /* these data variables shall be reset when reading data from file */
@@ -122,7 +128,13 @@ void init(String jermCrypt_path, String save_dir)
 
     TAIL = HEAD;
 
-    load_structure(jermCrypt_path, save_dir);
+    data_loaded = load_structure(jermCrypt_path, save_dir);
+
+    if (!data_loaded && DATA_FILE_PRESENT)
+    {
+        fprintf(stdout,"data file found but jermCrypt returned error. exitting system\n");
+        exit(3);
+    }
 
 
 }
@@ -2675,6 +2687,9 @@ bool load_constants(String jermCrypt_path, String save_dir)
         printf("<load_constants> decrypting file to read data: %s\n",jermCryptReply);
         dlclose(libjermCrypt);
         pthread_mutex_unlock(&glock);
+
+        DATA_FILE_PRESENT = true;
+        
         return status;
     }
 
@@ -3049,6 +3064,9 @@ bool load_structure(String jermCrypt_path, String save_dir)
         printf("<load_structure> decrypting file to read data: %s\n",jermCryptReply);
         dlclose(libjermCrypt);
         pthread_mutex_unlock(&glock);
+        
+        DATA_FILE_PRESENT = true;
+
         return status;
     }
 
