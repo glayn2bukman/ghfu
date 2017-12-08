@@ -1,5 +1,5 @@
-1) .finance_code
-2) .jermCrypt
-3) .jpesa
-4) .known_clients
-5) .monthly_operations_code
+1) .finance_code                # password
+2) .jermCrypt                   # password
+3) .jpesa                       # api-uname;pswd
+4) .known_clients               # each IP on a new line
+5) .monthly_operations_code     #pasword
