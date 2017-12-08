@@ -100,7 +100,7 @@ jdecode = json.JSONDecoder().decode
 
 LAST_PERFORMED_MONTHLY_OPERATIONS = [0,0,0]
 
-TRANSACTION_CHECK_DELAY = 30 # delay for checking if pending transaction has been effected
+TRANSACTION_CHECK_DELAY = .5 # delay for checking if pending transaction has been effected
 JPESA_DEPOSIT_CHARGES = .03  # also applies when tranfering funds from jpesa to jpesa
 JPESA_WITHDRAW_CHARGES = 500.0
 
@@ -208,7 +208,9 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
             reply = requests.post("http://0.0.0.0:{}/test_transaction_status".format(finance_server_port), 
                 json={"code":finance_server_code, "ref":reference}).text
             reply = jdecode(reply)
+
             print reply
+
             if not reply["status"]:
                 if reply["log"]=="No Record Matching Transaction ID" and func==libghfu.redeem_account_points:
                     # this results from a bug in the jpesa api that always returns 'libghfu.redeem_account_points'
@@ -221,6 +223,9 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
                     CODES[code]["actionlog"] = "Operation bounced by client."
                     CODES[code]["delete"] = True
                     break
+
+            print code,reply
+
         except: # finance server is down for some reason...
             server_log("the finance server is down. look into this ASAP!")
             time.sleep(TRANSACTION_CHECK_DELAY)
@@ -235,7 +240,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
             if func==libghfu.register_new_member:
                 CODES[code]["id"] = func_reply
             
-            if info(logfile): 
+            if info(logfile):
                 CODES[code]["status"] = False
                 CODES[code]["actionlog"] = info(logfile)
             else:
@@ -246,6 +251,8 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
                     threading.Thread(target=libghfu.save_structure, args=(
                         os.path.join(path,"lib"), os.path.join(path,"files","saves")
                         )).start()
+                
+                print reply
 
             CODES[code]["delete"] = True
                                     
@@ -998,7 +1005,9 @@ if __name__=="__main__":
     if libghfu.account_id(libghfu.get_account_by_id(1))==0:
         # create contemporary member...to act as first member in case theere are no members yet in structure
         libghfu.register_new_member(0, "PSEUDO-ROOT",
-            c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value,
+            c_float.in_dll(libghfu, "ACCOUNT_CREATION_FEE").value+
+            c_float.in_dll(libghfu, "OPERATIONS_FEE").value+
+            c_float.in_dll(libghfu, "MINIMUM_INVESTMENT").value,
             0,
             file_path("pseudo-root"))
         print "created pseudo-root account to be used (no saved data found!)"
@@ -1018,7 +1027,7 @@ if __name__=="__main__":
     finance_server_port = 54322
 
     # start thread that monitors the exchange rate...
-    threading.Thread(target=fetch_current_exchange_rate, args=()).start()
+    #threading.Thread(target=fetch_current_exchange_rate, args=()).start()
 
     app.run("0.0.0.0", 50500, threaded=1, debug=1)
 

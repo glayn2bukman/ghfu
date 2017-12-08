@@ -174,9 +174,10 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
 
     if(account==NULL){ghfu_warn(7,fout); return false;}
 
-    pthread_mutex_lock(&glock);
-    
+    pthread_mutex_lock(&glock);    
     account->pv += points;
+    pthread_mutex_unlock(&glock);    
+
     raise_rank(account, fout);
 
     /* now update the appropriate leg CV for all uplinks until ROOT(uplink==NULL) in the tree of this account 
@@ -187,9 +188,6 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
     */
 
     Account acc = account->uplink;
-    
-    pthread_mutex_unlock(&glock);
-
 
     unsigned int highest_rank, i;
     
@@ -598,6 +596,7 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
     }
 
     pthread_mutex_unlock(&glock);
+
 
     if (account->uplink!=NULL)
     {
