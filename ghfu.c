@@ -54,6 +54,7 @@ void init(String jermCrypt_path, String save_dir)
 
     /* check if libjermCrypt.so is present*/
     // #######################
+    /*
     unsigned int buff_length;
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     
@@ -64,6 +65,7 @@ void init(String jermCrypt_path, String save_dir)
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
     if(!libjermCrypt) {fprintf(stdout,"libjermCrypt.so not found. exitting system\n"); exit(4);}
+    */
     // #######################
 
 
