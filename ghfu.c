@@ -52,6 +52,21 @@ void init(String jermCrypt_path, String save_dir)
 
     GLOCK_INITIALISED = true;
 
+    /* check if libjermCrypt.so is present*/
+    // #######################
+    unsigned int buff_length;
+    String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
+    
+    length_of_all_strings(crypt_lib_paths, &buff_length);
+    char crypt_lib_path[buff_length+1];
+    join_strings(crypt_lib_path, crypt_lib_paths);
+
+    void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
+
+    if(!libjermCrypt) {fprintf(stdout,"libjermCrypt.so not found. exitting system\n"); exit(4);}
+    // #######################
+
+
     bool data_loaded;
 
     data_loaded = load_constants(jermCrypt_path, save_dir);
@@ -2615,6 +2630,7 @@ bool dump_constants(String jermCrypt_path, String save_dir)
     fclose(fout);
     
     // encrypt file after writting data
+    /*
     if(strcmp(
     jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true, false), "Ok"))
     {
@@ -2623,6 +2639,7 @@ bool dump_constants(String jermCrypt_path, String save_dir)
         pthread_mutex_unlock(&glock);
         return status;
     }        
+    */
     
     status = true;
 
@@ -2681,6 +2698,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
     fclose(fin);
 
     // decrypt_data_file before reading from it...
+    /*
     if(strcmp(
     jermCryptReply=decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
     {
@@ -2692,7 +2710,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
         
         return status;
     }
-
+    */
 
     fin = fopen(data_file_path,"rb");
 
@@ -2737,6 +2755,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
     fclose(fin);
     
     // encrypt data file when reading from it is done
+    /*
     if(strcmp(
     jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
     {
@@ -2745,6 +2764,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
         pthread_mutex_unlock(&glock);
         return status;
     }
+    */
             
     status = true;
     dlclose(libjermCrypt);
@@ -2973,6 +2993,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
     fclose(fout);
     
     // encrypt data after writting it
+    /*
     if(strcmp(
     jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
     {
@@ -2981,7 +3002,7 @@ bool save_structure(String jermCrypt_path, String save_dir)
         pthread_mutex_unlock(&glock);
         return status;
     }        
-
+    */
             
     status = true;
     dlclose(libjermCrypt);
@@ -3057,7 +3078,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
     // decrypt data file before reading from it...
     // decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false);
-
+    /*
     if(strcmp(
     jermCryptReply=decrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
     {
@@ -3069,6 +3090,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
 
         return status;
     }
+    */ 
 
     AccountPointer acc_p, p_acc_p; /* p_acc_p = prev ac_p */
     AccountPointer child, p_child; /* p_acc_p = prev ac_p */
