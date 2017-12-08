@@ -6,7 +6,8 @@ This header file contains the primary DATA values for the project GHFU
 char *JERM_CRYPT_LIB = "libjermCrypt.so";
 char *DATA_FILE = "data.ghfu";
 char *STRUCTURE_FILE = "structure.ghfu";
-char *JERM_CRYPT_PASSWORD = "j<ermG.hfuCrypt>";
+char *JERM_CRYPT_PASSWORD_FILE = "/var/lib/ghfu/.jermCrypt";
+char JERM_CRYPT_PASSWORD[255]; // max-password length is 254
 bool DATA_FILE_PRESENT=false;
 
 /* the global-lock checker (the GL ensures that we have a thread-safe program)*/

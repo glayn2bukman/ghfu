@@ -1,0 +1,5 @@
+1) .finance_code
+2) .jermCrypt
+3) .jpesa
+4) .known_clients
+5) .monthly_operations_code

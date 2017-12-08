@@ -54,7 +54,6 @@ void init(String jermCrypt_path, String save_dir)
 
     /* check if libjermCrypt.so is present*/
     // #######################
-    /*
     unsigned int buff_length;
     String crypt_lib_paths[] = {jermCrypt_path,"/",JERM_CRYPT_LIB,"\0"};
     
@@ -65,9 +64,24 @@ void init(String jermCrypt_path, String save_dir)
     void *libjermCrypt = dlopen(crypt_lib_path, RTLD_GLOBAL|RTLD_LAZY);
 
     if(!libjermCrypt) {fprintf(stdout,"libjermCrypt.so not found. exitting system\n"); exit(4);}
-    */
     // #######################
 
+    /* check if jermCrypt password file exists */
+    FILE *jermCrypt_pswd_file = fopen(JERM_CRYPT_PASSWORD_FILE,"rb");
+    if(!jermCrypt_pswd_file)
+        {fprintf(stdout,"libjermCrypt password file not found. exitting system\n"); exit(4);}
+
+    unsigned char c;
+    unsigned int pswd_xter_pos = 0;
+    while (c=fgetc(jermCrypt_pswd_file))
+    {
+        if (feof(jermCrypt_pswd_file)) break;
+        JERM_CRYPT_PASSWORD[pswd_xter_pos] = c;
+        ++pswd_xter_pos;
+    } JERM_CRYPT_PASSWORD[pswd_xter_pos] = '\0';
+    
+    fclose(jermCrypt_pswd_file);
+    // ###############################
 
     bool data_loaded;
 
