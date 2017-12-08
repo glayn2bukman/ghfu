@@ -208,6 +208,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
             reply = requests.post("http://0.0.0.0:{}/test_transaction_status".format(finance_server_port), 
                 json={"code":finance_server_code, "ref":reference}).text
             reply = jdecode(reply)
+            print reply
             if not reply["status"]:
                 if reply["log"]=="No Record Matching Transaction ID" and func==libghfu.redeem_account_points:
                     # this results from a bug in the jpesa api that always returns 'libghfu.redeem_account_points'

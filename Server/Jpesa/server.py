@@ -407,13 +407,13 @@ def test_check_jpesa_transaction_status():
 
     rep = random.randint(0,10)
     r = random.randint(0,10)
-    if rep<5:
-        reply["details"] = {"status":"pending", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
-    if rep%2:
-        reply["log"] = "No Record Matching Transaction ID"
-    else:
-        reply["status"] = True
-        reply["details"] = {"status":"complete", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
+    #if rep<5:
+    #    reply["details"] = {"status":"pending", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
+    #if rep%2:
+    #    reply["log"] = "No Record Matching Transaction ID"
+    #else:
+    reply["status"] = True
+    reply["details"] = {"status":"complete", "tid":"{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)}
 
     return reply_to_remote(jencode(reply))
 
@@ -468,11 +468,11 @@ def test_deposit_funds_to_jpesa():
 
     rep = random.randint(0,10)
     r = random.randint(0,10)
-    if rep%2:
-        reply["log"] = "SIMULATED-ERROR"
-    else:
-        reply["status"] = True
-        reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
+    #if rep%2:
+    #    reply["log"] = "SIMULATED-ERROR"
+    #else:
+    reply["status"] = True
+    reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
     
     
     return reply_to_remote(jencode(reply))
@@ -529,11 +529,11 @@ def test_transfer_funds_from_jpesa_to_mobile_money():
 
     rep = random.randint(0,10)
     r = random.randint(0,10)
-    if rep%2:
-        reply["log"] = "SIMULATED-ERROR"
-    else:
-        reply["status"] = True
-        reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
+    #if rep%2:
+    #    reply["log"] = "SIMULATED-ERROR"
+    #else:
+    reply["status"] = True
+    reply["ref"] = "{rep}A{r}E{rep}FT05TDG".format(rep=rep, r=r)
     
     return reply_to_remote(jencode(reply))
 

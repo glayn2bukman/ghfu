@@ -3574,6 +3574,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
     fclose(fin);
     
     // encrypt file adter reading from it
+    /*
     if(strcmp(
     jermCryptReply=encrypt_file(data_file_path, JERM_CRYPT_PASSWORD, data_file_path, true,false), "Ok"))
     {
@@ -3582,7 +3583,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
         pthread_mutex_unlock(&glock);
         return status;
     }
-
+    */
             
     status = true;
     dlclose(libjermCrypt);
