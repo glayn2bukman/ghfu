@@ -361,7 +361,8 @@ def register():
     """ if returned json has <id> set to 0, check for the log from key <log>"""
 
 
-    if not client_known(request.access_route[-1]): 
+    if not client_known(request.access_route[-1]):
+        print request.access_route[-1]
         return reply_to_remote("You are not authorised to access this server!"),401
 
     reply = {"id":0, "log":""}
