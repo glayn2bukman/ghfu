@@ -99,9 +99,11 @@ typedef struct account_pointer
 
 typedef struct account
 {
+    time_t date; // account-creation date...
     ID id;
     String names;
     Amount pv; /* Personal Volume (the backbone of all commissions and bonuses) */
+    Amount pv_made_in_first_month;
     Amount available_balance;
     Amount total_returns;
     Amount total_redeems;

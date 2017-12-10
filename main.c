@@ -72,7 +72,7 @@ int main()
     //}
 
 
-    structure_details(NULL);
+    structure_details(b1);
     dump_structure_details(b1->id, "test/test.json");
 
     save_structure("lib","test");

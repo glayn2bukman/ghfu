@@ -189,8 +189,14 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
 
     if(account==NULL){ghfu_warn(7,fout); return false;}
 
+    time_t t; time(&t);
+
     pthread_mutex_lock(&glock);    
     account->pv += points;
+    
+    if ((t-account->date)<=GHFU_MONTH) 
+        account->pv_made_in_first_month += points;
+    
     pthread_mutex_unlock(&glock);    
 
     raise_rank(account, fout);
@@ -493,6 +499,8 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     if(today->tm_mday > LAST_INVESTMENT_DAY){ghfu_warn(19,fout); return false;}
 
+    if(!AVAILABLE_INVESTMENTS){ghfu_warn(25,fout); return false;}
+
 
     if(account==NULL) 
         {fprintf(fout,"could not create investment. Invalid account provided!\n"); return false;}
@@ -633,6 +641,13 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     increment_pv(account,points,fout);
 
+    pthread_mutex_lock(&glock);
+
+    --AVAILABLE_INVESTMENTS;
+
+    pthread_mutex_unlock(&glock);
+
+
     return true; /* leave this out and you have memory leaks when invest money is called from regiter_member*/
 }
 
@@ -713,6 +728,10 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     new_account->highest_leg_ranks[0] = 0.0;
     new_account->highest_leg_ranks[1] = 0.0;
     new_account->highest_leg_ranks[2] = 0.0;
+
+    new_account->pv_made_in_first_month = 0.0;
+
+    time(&(new_account->date));
 
     if (test_feasibility) /* no more checks, operation is feasible*/
     {
@@ -1313,6 +1332,7 @@ bool calculate_tvc(Account account, FILE *fout)
             /* since logic operators are processed left to right, this code won't 
                break when account->children->next==NULL!
             */
+            account->pv_made_in_first_month &&
            (account->children!=NULL) && 
            (account->children->next!=NULL) && 
            /* in addition to having atleast 2 direct-children, each child must have 
@@ -1339,10 +1359,10 @@ bool calculate_tvc(Account account, FILE *fout)
             j = TVC[j][1] ? j : --j;
             
             returns = TVC[j][1]*.01*actual_lower_leg_volume;
-            /* returns should not be more than PV made in the first month!!!!
-               i rather changed this condition to "thou shalt not get TVC>375 points"
-            */
-            returns = returns>(MAXIMUM_INVESTMENT*POINT_FACTOR) ? MAXIMUM_INVESTMENT*POINT_FACTOR : returns;
+            
+            /* returns should not be more than PV made in the first month!!!! */
+            returns = returns > account->pv_made_in_first_month ? 
+                account->pv_made_in_first_month : returns;
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
@@ -1413,6 +1433,7 @@ bool calculate_tvc(Account account, FILE *fout)
             /* since logic operators are processed left to right, this code won't 
                break when account->children->next==NULL or when account->children->next->next==NULL!
             */
+            acc->pv_made_in_first_month &&
            (acc->children!=NULL) && 
            (acc->children->next!=NULL) && 
            /* in addition to having atleast 2 direct-children, each child must have 
@@ -1439,10 +1460,10 @@ bool calculate_tvc(Account account, FILE *fout)
             j = TVC[j][1] ? j : --j;
             
             returns = TVC[j][1]*.01*actual_lower_leg_volume;
-            /* returns should not be more than PV made in the first month!!!!
-               i rather changed this condition to "thou shalt not get TVC>375 points"
-            */
-            returns = returns>(MAXIMUM_INVESTMENT*POINT_FACTOR) ? MAXIMUM_INVESTMENT*POINT_FACTOR : returns;
+
+            /* returns should not be more than PV made in the first month!!!! */
+            returns = returns > acc->pv_made_in_first_month ? 
+                acc->pv_made_in_first_month : returns;
             
             if(actual_lower_leg_volume) /* you dont wanna waste resources on 0-value commissions */
             {
@@ -2194,6 +2215,8 @@ void structure_details(const Account account)
         return;
     }
 
+    struct tm *lt;
+
     //printf("show structure details\n");
 
     if(account!=NULL)
@@ -2201,9 +2224,13 @@ void structure_details(const Account account)
 
         pthread_mutex_lock(&glock);
 
+        lt = localtime(&(account->date));
+
         printf("\n%s\n",account->names);
+        printf("  Accoutn creation date: %d/%d/%d\n", lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900));
         printf("  ID: %ld\n",account->id);
         printf("  Uplink: %s\n", account->uplink==NULL ? "ROOT" : account->uplink->names);
+        printf("  PV made in first month = %.2lf points\n",account->pv_made_in_first_month);
         printf("  CPV = %.2lf points\n",account->pv);
         printf("  Total Returns = $%.2lf\n",account->total_returns);
         printf("  Available Balance = $%.2lf\n",account->available_balance);
@@ -2236,9 +2263,13 @@ void structure_details(const Account account)
 
         acc = acc_p->account;
 
+        lt = localtime(&(acc->date));
+
         printf("\n%s\n",acc->names);
+        printf("  Account creation date: %d/%d/%d\n", lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900));
         printf("  ID: %ld\n",acc->id);
         printf("  Uplink: %s\n", acc->uplink==NULL ? "ROOT" : acc->uplink->names);
+        printf("  PV made in first month = %.2lf points\n",acc->pv_made_in_first_month);
         printf("  CPV = %.2lf points\n",acc->pv);
         printf("  Total Returns = $%.2lf\n",acc->total_returns);
         printf("  Available Balance = $%.2lf\n",acc->available_balance);
@@ -2280,11 +2311,14 @@ bool dump_structure_details(ID account_id, String fname)
     //printf("done\n");
 
     bool status = false;
+    struct tm *lt;
 
     if(account==NULL) return status;
 
     FILE *fout = fopen(fname, "w");
     if(!fout) return status;
+
+    lt = localtime(&(account->date));
 
     fprintf(fout, "{");
 
@@ -2293,12 +2327,14 @@ bool dump_structure_details(ID account_id, String fname)
     /* personal info */
     fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
         "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f,"
-        "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"], \"COV\":%.2f",
+        "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"], \"COV\":%.2f"
+        ", \"creation-date\":\"%d/%d/%d\", \"first-month-pv\":%.2f",
         account->names, account->id, (account->uplink==NULL ? "ROOT" : account->uplink->names),
         account->pv,account->total_returns,account->available_balance,account->total_redeems,
         RANKS[account->rank], RANKS[account->highest_leg_ranks[0]], RANKS[account->highest_leg_ranks[1]],
         RANKS[account->highest_leg_ranks[2]],
-        account->pv+account->leg_volumes[0]+account->leg_volumes[1]+account->leg_volumes[2]
+        account->pv+account->leg_volumes[0]+account->leg_volumes[1]+account->leg_volumes[2],
+        lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),account->pv_made_in_first_month
     );
 
     pthread_mutex_unlock(&glock);
@@ -2734,7 +2770,8 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fin = fopen(data_file_path,"rb");
 
-    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
+    fscanf(fin, 
+        "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY,&EXCHANGE_RATE,&WITHDRAW_CHARGE,
@@ -2912,11 +2949,12 @@ bool save_structure(String jermCrypt_path, String save_dir)
         fprintf(fout, 
                 /*section 1 (first-hand numeric attributes of the member + names)*/
             "%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%d\x1"
-            "%d\x1%d\x1%d\x1%ld\x1%s",
+            "%d\x1%d\x1%d\x1%ld\x1%.2f\x1%ld\x1%s",
             acc->id,acc->pv,acc->available_balance,acc->total_returns,acc->total_redeems,
             (acc->uplink==NULL ? 0 : acc->uplink->id), acc->leg_volumes[0], acc->leg_volumes[1],
             acc->leg_volumes[2],acc->TVC_levels[0],acc->TVC_levels[1], acc->rank,
             acc->highest_leg_ranks[0],acc->highest_leg_ranks[1],acc->highest_leg_ranks[2],
+            acc->date, acc->pv_made_in_first_month,
             strlen(acc->names),acc->names
         );
 
@@ -3252,13 +3290,17 @@ bool load_structure(String jermCrypt_path, String save_dir)
             "%d\x1"
             "%d\x1"
             "%d\x1"
-            "%d\x1",
+            "%d\x1"
+            "%ld\x1"
+            "%f\x1"
+            ,
             &(new_account->pv), &(new_account->available_balance), &(new_account->total_returns),
             &(new_account->total_redeems), &uplink_id, new_account->leg_volumes,
             &(new_account->leg_volumes[1]), &(new_account->leg_volumes[2]),
             new_account->TVC_levels, &(new_account->TVC_levels[1]), &(new_account->rank),
             new_account->highest_leg_ranks, &(new_account->highest_leg_ranks[1]),
-            &(new_account->highest_leg_ranks[2])
+            &(new_account->highest_leg_ranks[2]),
+            &(new_account->date), &(new_account->pv_made_in_first_month)
         );
         
         pthread_mutex_unlock(&glock);

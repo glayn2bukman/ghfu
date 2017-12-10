@@ -13,6 +13,9 @@ bool DATA_FILE_PRESENT=false;
 /* the global-lock checker (the GL ensures that we have a thread-safe program)*/
 bool GLOCK_INITIALISED = false;
 
+/* how many seconds are in one month */
+unsigned long GHFU_MONTH = 30*24*60*60;
+
 /* the conversion factor from amount($) to points */
 #define TBB_MAX_GENERATIONS 7
 

@@ -459,7 +459,9 @@ def details():
                 ...],
             "direct_children":[str child1_names, str child2_names,.....] /* names NOT ids, again, its for 
                                                                             for security reasons */
-            "withdraws":[[str date, float amount],...]
+            "withdraws":[[str date, float amount],...],
+            "creation-date": str,
+            "first-month-pv": float
         }
     
     """
