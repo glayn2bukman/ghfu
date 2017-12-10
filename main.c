@@ -9,20 +9,20 @@ int main()
     Account b1 = register_member(NULL, "B1",ACF+DIAMOND,false,stdout);
 
     Account b2 = register_member(b1, "B2",ACF+DIAMOND,false,stdout);
-    buy_property(b2,60*4,false,stdout);
+    //buy_property(b2,60*4,false,stdout);
 
     Account b3 = register_member(b2, "B3",ACF+RUBY,false,stdout);
 
     Account b4 = register_member(b3, "B4",ACF+DIAMOND,false,stdout);
-    buy_property(b4,60*4,false,stdout);
+    //buy_property(b4,60*4,false,stdout);
 
     Account b5 = register_member(b4, "B5",ACF+SAPHIRE,false,stdout);
 
     Account b6 = register_member(b5, "B6",ACF+DIAMOND,false,stdout);
-    buy_property(b6,60*4,false,stdout);
+    //buy_property(b6,60*4,false,stdout);
 
     Account b7 = register_member(b6, "B7",ACF,false,stdout);
-    buy_property(b7,60*4,false,stdout);
+    //buy_property(b7,60*4,false,stdout);
 
     Account b8 = register_member(b7, "B8",ACF+DIAMOND,false,stdout);
 
@@ -72,7 +72,7 @@ int main()
     //}
 
 
-    structure_details(b1);
+    structure_details(NULL);
     dump_structure_details(b1->id, "test/test.json");
 
     save_structure("lib","test");

@@ -587,6 +587,7 @@ def get_data_constants():
     reply["withdraw-charge"] = c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value
     reply["rate-inflate"] = c_int.in_dll(libghfu, "RATE_INFLATE").value
     reply["minimum-withdraw"] = MINIMUM_WITHDRAW
+    reply["available-investments"] = c_long.in_dll(libghfu, "AVAILABLE_INVESTMENTS").value
 
     return reply_to_remote(jencode(reply))
 
@@ -611,6 +612,10 @@ def set_data_constants():
     if json_req:
         for key in json_req:
             if(isinstance(json_req[key],int) or isinstance(json_req[key],float)):
+                if key=="available-investments" and request.access_route[-1]!="127.0.0.1":
+                    # only local-host can edit this information...
+                    reply[key]=False
+                    continue
                 reply[key] = libghfu.set_constant(key, float(json_req[key]))
                 reply[key] = True if reply[key] else False
             else: reply[key]=False
@@ -618,6 +623,10 @@ def set_data_constants():
         for key in request.form:
             try:
                 value = float(request.form[key])
+                if key=="available-investments" and request.access_route[-1]!="127.0.0.1":
+                    # only local-host can edit this information...
+                    reply[key]=False
+                    continue
                 reply[key] = libghfu.set_constant(key, value)
                 reply[key] = True if reply[key] else False
             except: reply[key]=False

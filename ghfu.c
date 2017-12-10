@@ -101,13 +101,14 @@ void init(String jermCrypt_path, String save_dir)
         ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
 
         CURRENT_ID = 0; /* only increments, never the opposite */
+        AVAILABLE_INVESTMENTS = 100; /* be carefull of this value. this breaks or makes us! */
 
         /* monthly-aut-refills 
             default values;
                 {
-                    {375, 40},
-                    {250, 40},
+                    {175, 40},
                     {125, 40},
+                    {75, 40},
                     {0, 0}
                 };
 
@@ -123,19 +124,19 @@ void init(String jermCrypt_path, String save_dir)
             {
                 case 0: 
                     {
-                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 375; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 175; 
                         MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
                         break;
                     }
                 case 1: 
                     {
-                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 250; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 125; 
                         MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
                         break;
                     }
                 case 2: 
                     {
-                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 125; 
+                        MONTHLY_AUTO_REFILL_PERCENTAGES[i][0] = 75; 
                         MONTHLY_AUTO_REFILL_PERCENTAGES[i][1] = 40; 
                         break;
                     }
@@ -2367,6 +2368,8 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     
     account->available_balance -= amount;
     account->total_redeems += amount;
+    
+    COMMISSIONS -= amount;
 
     /*
         the actual system floats n expenses aint modified...sohuld they?
@@ -2571,6 +2574,7 @@ bool set_constant(String constant, Amount value)
     else if(!strcmp(constant, "exchange-rate")) EXCHANGE_RATE = (int)value;
     else if(!strcmp(constant, "withdraw-charge")) WITHDRAW_CHARGE = value;
     else if(!strcmp(constant, "rate-inflate")) RATE_INFLATE = (int)value;
+    else if(!strcmp(constant, "available-investments")) AVAILABLE_INVESTMENTS = (ID)value;
 
     else status = false;
 
@@ -2622,10 +2626,11 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     if(encrypt_file==NULL) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
-    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1", 
+    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
         MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
-        ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY,EXCHANGE_RATE,WITHDRAW_CHARGE,RATE_INFLATE
+        ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY,EXCHANGE_RATE,WITHDRAW_CHARGE,RATE_INFLATE,
+        AVAILABLE_INVESTMENTS
         );
 
     /* dump current auto-refill percentages */
@@ -2729,11 +2734,11 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
     fin = fopen(data_file_path,"rb");
 
-    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1", 
+    fscanf(fin, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY,&EXCHANGE_RATE,&WITHDRAW_CHARGE,
-        &RATE_INFLATE
+        &RATE_INFLATE,&AVAILABLE_INVESTMENTS
         );
 
     /* extract monthly-auto-refill-percentages */

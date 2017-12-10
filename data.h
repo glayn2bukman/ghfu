@@ -75,6 +75,7 @@ char *ERRORS[] = {
     /*22*/ "RETURNS TRANCATED TO NOT EXCEED MAXIMUM ALLOWABLE INVESTMENT PROFIT",
     /*23*/ "RETURNS TOPPED UP TO AQUIRE MINIMUM ALLOWABLE INVESTMENT PROFIT",
     /*24*/ "THIS ACCOUNT BELONGS TO THE SYSTEM. YOU CANT REDEEM ITS POINTS",
+    /*25*/ "NO MORE INVESTMENTS ALLOWED AT THE MOMENT. PLEASE INQUIRE WITH ADMIN WHEN OPPORTUNITIES MIGHT BE OPEN AGAIN",
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
@@ -91,7 +92,7 @@ float **MONTHLY_AUTO_REFILL_PERCENTAGES = NULL;
 
 /* account types */
 char *ACCOUNTS[] = {
-    "Independent Brocker",
+    "Independent Broker",
     "Saphire",
     "Ruby",
     "Diamond",
@@ -99,7 +100,7 @@ char *ACCOUNTS[] = {
 };
 
 char *RANKS[] = {
-    /*0*/ "Independent Brocker",
+    /*0*/ "Independent Broker",
     /*1*/ "Consultant",
     /*2*/ "Junior Manager",
     /*3*/ "Manager",
