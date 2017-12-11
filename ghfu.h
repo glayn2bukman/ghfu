@@ -41,7 +41,7 @@
 
 
 /* type declarations */
-typedef unsigned long ID;
+typedef unsigned long long ID; // long < 4.4 billion. to be on a safe side, i chose long long...
 typedef float Amount;
 typedef char *String;
 
@@ -143,13 +143,86 @@ typedef struct child
 {
     ID id;
     ID uplink_id;   
+
     struct child *next;
+    
 } *Child;
 
-Amount SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS;
-ID ACTIVE_ACCOUNTS, CURRENT_ID, AVAILABLE_INVESTMENTS;
+typedef struct payment
+{
+    time_t date;    
+    Amount amount; // in UGX NOT $
+
+    time_t next_payment_date; // calculated from <amount> and Service->unit_price and Service->payment_day
+
+} *Payment;
+
+typedef struct service
+    /* ghfu services such as house-renting, garbage collection, etc
+       the system assumes all services are paid monthly, for services not paid this way, re-factor to 
+       conform to this logic eg if a service is paid once every 6 months, let the system think its paid
+       monthly and et the unit_price to price/6
+    */
+{
+    bool active; // you dont wanna waste time on innactive services...eg the tenant can leave the house
+
+    String name;
+    ID id; // one house can have multiple rented rooms each with its own unique ID
+
+    time_t acquisition_date;
+    time_t payment_day;
+    time_t last_payment_date;
+    time_t next_payment_date; // not the exact date but rather, when the date SHOULD have been paid!
+
+    // these 2 values below are in UGX NOT $ and so this money cant be counted together with
+    // the main system float!!!
+    Amount unit_price;
+    
+    Payment *payments;
+    Payment *last_payment;
+
+    struct service *next;
+    struct service *prev;
+
+} *Service;
+
+typedef struct consumer
+    /* data structure describing ghfu-consumers such as tenants */
+{
+    time_t date; // consumer_account_creation_date
+    String names;
+    ID id;
+
+    Amount pv;
+    Amount available_balance;
+    Amount total_returns;
+    Amount total_redeems;
+
+    Commission commissions;
+    Commission last_commission;
+
+    Withdraw withdraws;
+    Withdraw last_withdraw;
+    
+    Service services;
+    Service last_service;
+
+} *Consumer;
+
+typedef struct consumer_pointer
+{
+    Consumer consumer;
+
+    struct consumer_pointer *next;
+    struct consumer_pointer *prev;
+    
+} *ConsumerPointer;
+
+double SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS; // used double not float. float<4.4 billion
+ID ACTIVE_ACCOUNTS, CURRENT_ID, AVAILABLE_INVESTMENTS, CURRENT_CONSUMER_ID, CURRENT_SERVICE_ID;
 
 AccountPointer HEAD, TAIL;
+ConsumerPointer CONSUMER_HEAD, CONSUMER_TAIL;
 
 /* function prototypes */
 void memerror(FILE *fout);
@@ -168,6 +241,9 @@ bool raise_rank(Account account, FILE *fout);
 bool calculate_tvc(Account account, FILE *fout);
 bool award_rank_monthly_bonuses(Account account, FILE *fout);
 
+Consumer register_consumer(String names, FILE *fout);
+ID register_new_consumer(String names, String fout_name);
+
 /* functions to visually display accounts */
 void show_commissions(const Account account);
 void show_leg_volumes(const Account account);
@@ -184,6 +260,7 @@ bool dump_withdraws(const Account account, FILE *fout);
 bool dump_direct_children(const Account account, FILE *fout);
 bool dump_structure_details(ID account_id, String fout_name); 
 
+/* functions to redeem funds from ghfu-members*/
 bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *fout);
 bool redeem_account_points(ID account_id, Amount amount, bool test_feasibility, String fout_path);
 
@@ -191,7 +268,9 @@ void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);
 
 Account get_account_by_id(const ID id);
+Consumer get_consumer_by_id(const ID id);
 ID account_id(Account account);
+ID consumer_id(Consumer consumer);
 
 bool monthly_operations(FILE *fout);
 bool perform_monthly_operations(String fout_name);
@@ -217,3 +296,8 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
 
 /* thread-safe variables */
 pthread_mutex_t glock;
+
+/* data manipulation methods, to be used in place of database search calls */
+bool search_investments(time_t search_from, time_t search_to, 
+    unsigned int months_returned_from, unsigned int months_returned_to,
+    String type, String _fout);

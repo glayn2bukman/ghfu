@@ -6,6 +6,7 @@ This header file contains the primary DATA values for the project GHFU
 char *JERM_CRYPT_LIB = "libjermCrypt.so";
 char *DATA_FILE = "data.ghfu";
 char *STRUCTURE_FILE = "structure.ghfu";
+char *CONSUMER_DATA_FILE = "consumers.ghfu";
 char *JERM_CRYPT_PASSWORD_FILE = "/var/lib/ghfu/.jermCrypt";
 char JERM_CRYPT_PASSWORD[255]; // max-password length is 254
 bool DATA_FILE_PRESENT=false;
@@ -201,3 +202,6 @@ float TVC[][2] = { /* Team-Volume-Commissions */
 float HOB = .1; /* home-office-bonus */
 float LCB = .1; /* laxury-car-bonus */
 float EAB = .03; /* expense-account-bonus */
+
+/* consumer rebet (discount paied for customer who pays in time) (%)*/
+float CONSUMER_DISCOUNT = 10.0; // this value is a %ge

@@ -101,6 +101,8 @@ void init(String jermCrypt_path, String save_dir)
         ACTIVE_ACCOUNTS=0; /* decremeneted when account is deleted */
 
         CURRENT_ID = 0; /* only increments, never the opposite */
+        CURRENT_CONSUMER_ID = 0; /* only increments, never the opposite */
+        CURRENT_SERVICE_ID = 0;
         AVAILABLE_INVESTMENTS = 100; /* be carefull of this value. this breaks or makes us! */
 
         /* monthly-aut-refills 
@@ -151,14 +153,23 @@ void init(String jermCrypt_path, String save_dir)
     }
 
     HEAD = malloc(sizeof(struct account_pointer));
+    CONSUMER_HEAD = malloc(sizeof(struct consumer_pointer));
 
-    if(HEAD==NULL) memerror(stdout);
+
+    if((HEAD==NULL) || (CONSUMER_HEAD==NULL)) memerror(stdout);
 
     HEAD->account = NULL;
     HEAD->next = NULL;
     HEAD->prev = NULL;
 
     TAIL = HEAD;
+
+    CONSUMER_HEAD->consumer = NULL;
+    CONSUMER_HEAD->next = NULL;
+    CONSUMER_HEAD->prev = NULL;
+
+    CONSUMER_TAIL = CONSUMER_HEAD;
+
 
     data_loaded = load_structure(jermCrypt_path, save_dir);
 
@@ -474,9 +485,11 @@ bool invest(ID account_id, const Amount amount, const bool update_system_float, 
 {
     /*python/java/etc interface to invest_money*/
 
+    FILE *fout = fopen(fout_name, "w");
+    if(!fout) return false;
+
     Account account = get_account_by_id(account_id);
 
-    FILE *fout = fopen(fout_name, "w");
     bool invested = invest_money(account,amount, update_system_float, test_feasibility, fout);
 
     fclose(fout);
@@ -656,7 +669,8 @@ ID register_new_member(ID uplink_id, String names, Amount amount, bool test_feas
     /* if return value==0, error occured, otherwise, new account ID is returned */
 
     /* python/java/etc interface to register_member */
-    FILE *fout = fopen(fout_name,"a");
+    FILE *fout = fopen(fout_name,"a");    
+    if(!fout) return 0;
 
     ID new_id;
 
@@ -697,7 +711,10 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     
     if(new_account==NULL) memerror(fout);
 
+    pthread_mutex_lock(&glock);
     new_account->id = CURRENT_ID+1;
+    pthread_mutex_unlock(&glock);
+
     new_account->names = NULL;
     new_account->pv = 0;
     new_account->available_balance = 0;
@@ -892,9 +909,11 @@ bool buy_property(Account IB_account, Amount amount, bool test_feasibility, FILE
 bool purchase_property(ID IB_account_id, const Amount amount, bool test_feasibility, String fout_name)
 {
     /* python/java/etc interface to buy_property*/
-    Account IB_account = get_account_by_id(IB_account_id);
 
     FILE *fout = fopen(fout_name, "w");
+    if(!fout) return false;
+
+    Account IB_account = get_account_by_id(IB_account_id);
     
     bool status = buy_property(IB_account,amount, test_feasibility, fout);
     
@@ -1970,7 +1989,7 @@ void show_withdraws(const Account account)
 
     if(!GLOCK_INITIALISED)
     {
-        fprintf(stdout, "FAILED TO show investments. glock NOT INITIALISED. did you call init?"); 
+        fprintf(stdout, "FAILED TO show withdraws. glock NOT INITIALISED. did you call init?"); 
         return;
     }
 
@@ -2047,7 +2066,7 @@ bool dump_withdraws(const Account account, FILE *fout)
 
     if(!GLOCK_INITIALISED)
     {
-        fprintf(fout, "FAILED TO dump investments. glock NOT INITIALISED. did you call init?"); 
+        fprintf(fout, "FAILED TO dump withdraws. glock NOT INITIALISED. did you call init?"); 
         return false;
     }
 
@@ -2301,8 +2320,14 @@ bool dump_structure_details(ID account_id, String fname)
        fname is a full path to the output json file
     */
 
+    FILE *fout = fopen(fname, "w");
+    if(!fout) return false;
+
     if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO dump_structure. glock NOT INITIALISED. did you call init?"); 
         return false;
+    }
 
     //printf("dump structure details...");
 
@@ -2314,9 +2339,6 @@ bool dump_structure_details(ID account_id, String fname)
     struct tm *lt;
 
     if(account==NULL) return status;
-
-    FILE *fout = fopen(fname, "w");
-    if(!fout) return status;
 
     lt = localtime(&(account->date));
 
@@ -2420,8 +2442,11 @@ bool redeem_account_points(ID account_id, Amount amount, bool test_feasibility, 
 {
     /* python/java/etc interface to redeem_points */
 
-    Account account = get_account_by_id(account_id);
     FILE *fout = fopen(fout_name, "w");
+    if(!fout) return false;
+
+    Account account = get_account_by_id(account_id);
+
     bool redeemed = redeem_points(account, amount, test_feasibility, fout);
 
     fclose(fout);
@@ -2527,10 +2552,68 @@ Account get_account_by_id(const ID id)
     return acc_match;
 }
 
+Consumer get_consumer_by_id(const ID id)
+{
+    /* logic is same as for get_account_by_id */
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO get_consumer_by_id. glock NOT INITIALISED. did you call init?"); 
+        return NULL;
+    }
+
+    //printf("get consumer by id\n");
+
+
+    pthread_mutex_lock(&glock);
+    if((id>CURRENT_ID) || (HEAD==NULL) || (HEAD->next==NULL)) 
+        {pthread_mutex_unlock(&glock); return NULL;}
+
+    ConsumerPointer cp = (CONSUMER_TAIL==CONSUMER_HEAD) ? CONSUMER_HEAD->next :
+        (id > (CONSUMER_TAIL->consumer->id)/2 ? CONSUMER_TAIL : CONSUMER_HEAD->next);
+    
+    
+    bool ascending = cp==CONSUMER_HEAD->next ? true : false;
+    pthread_mutex_unlock(&glock);
+    
+    while(cp!=NULL)
+    {
+        pthread_mutex_lock(&glock);
+        
+        if(cp->consumer->id==id) {pthread_mutex_unlock(&glock); break;}
+
+        /* break flow the moment its detected that the account was deleted. this is made easy by 
+           the fact that id's are incremental */
+        if(ascending && (cp->consumer->id > id)) 
+            {pthread_mutex_unlock(&glock); return NULL;}
+        if((!ascending) && (cp->consumer->id < id))
+            {pthread_mutex_unlock(&glock); return NULL;}
+
+        cp = ascending ? cp->next: cp->prev;
+    
+        pthread_mutex_unlock(&glock);
+    }
+    
+    pthread_mutex_lock(&glock);
+    
+    Consumer consumer_match = cp==NULL ? NULL : cp->consumer; /*if return is NULL, that account was deleted*/
+    
+    pthread_mutex_unlock(&glock);
+    
+    return consumer_match;
+
+}
+
+
 ID account_id(Account account)
 {
     if(account==NULL) return 0;
     return account->id;
+}
+
+ID consumer_id(Consumer consumer)
+{
+    if(consumer==NULL) return 0;
+    return consumer->id;
 }
 
 bool monthly_operations(FILE *fout)
@@ -2554,8 +2637,13 @@ bool perform_monthly_operations(String fout_name)
 
     bool status = false;
 
-    FILE *fout = fopen(fout_name, "w"); fclose(fout);
+    FILE *fout = fopen(fout_name, "w"); 
+    if(!fout) return false;
+
+    fclose(fout);
+
     fout = fopen(fout_name, "a");
+    if(!fout) return false;
     
     if(MONTHLY_AUTO_REFILL_PERCENTAGES==NULL)
     {
@@ -2625,7 +2713,10 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 {
 
     if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO dump constants. glock NOT INITIALISED. did you call init?"); 
         return false;
+    }
 
     //printf("dump constants\n");
 
@@ -2662,11 +2753,13 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 
     if(encrypt_file==NULL) {fclose(fout); pthread_mutex_unlock(&glock); return status;}
 
-    fprintf(fout, "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
+    fprintf(fout, 
+        "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1"
+        "%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1%f\x1%ld\x1%ld\x1", 
         PAYMENT_DAY,POINT_FACTOR,ACCOUNT_CREATION_FEE,ANNUAL_SUBSCRIPTION_FEE,OPERATIONS_FEE,
         MINIMUM_INVESTMENT,MAXIMUM_INVESTMENT,SYSTEM_FLOAT,CUMULATIVE_COMMISSIONS,COMMISSIONS,
         ACTIVE_ACCOUNTS,CURRENT_ID,LAST_INVESTMENT_DAY,EXCHANGE_RATE,WITHDRAW_CHARGE,RATE_INFLATE,
-        AVAILABLE_INVESTMENTS
+        AVAILABLE_INVESTMENTS,CONSUMER_DISCOUNT,CURRENT_CONSUMER_ID,CURRENT_SERVICE_ID
         );
 
     /* dump current auto-refill percentages */
@@ -2676,7 +2769,7 @@ bool dump_constants(String jermCrypt_path, String save_dir)
         unsigned int num_of_arps=1;
         for(; MONTHLY_AUTO_REFILL_PERCENTAGES[num_of_arps-1][0]; ++num_of_arps);
         fprintf(fout, "%d\x1", num_of_arps);
-        for(int i=0; i<(num_of_arps); ++i) /*dont dump the last {0,0} coz we are certain its always there! */
+        for(unsigned int i=0; i<(num_of_arps); ++i) /*dont dump the last {0,0} coz we are certain its always there! */
             fprintf(fout, "%.2f\x1%.2f\x1", 
                 MONTHLY_AUTO_REFILL_PERCENTAGES[i][0],MONTHLY_AUTO_REFILL_PERCENTAGES[i][1]);
     }
@@ -2709,7 +2802,10 @@ bool dump_constants(String jermCrypt_path, String save_dir)
 bool load_constants(String jermCrypt_path, String save_dir)
 {
     if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO load constants. glock NOT INITIALISED. did you call init?"); 
         return false;
+    }
 
     //printf("load constants\n");
 
@@ -2771,11 +2867,13 @@ bool load_constants(String jermCrypt_path, String save_dir)
     fin = fopen(data_file_path,"rb");
 
     fscanf(fin, 
-        "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1", 
+        "%d\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1%f\x1"
+        "%ld\x1%ld\x1%d\x1%d\x1%f\x1%d\x1%ld\x1%f\x1%ld\x1%ld\x1", 
         &PAYMENT_DAY,&POINT_FACTOR,&ACCOUNT_CREATION_FEE,&ANNUAL_SUBSCRIPTION_FEE,&OPERATIONS_FEE,
         &MINIMUM_INVESTMENT,&MAXIMUM_INVESTMENT,&SYSTEM_FLOAT,&CUMULATIVE_COMMISSIONS,&COMMISSIONS,
         &ACTIVE_ACCOUNTS,&CURRENT_ID,&LAST_INVESTMENT_DAY,&EXCHANGE_RATE,&WITHDRAW_CHARGE,
-        &RATE_INFLATE,&AVAILABLE_INVESTMENTS
+        &RATE_INFLATE,&AVAILABLE_INVESTMENTS,&CONSUMER_DISCOUNT,&CURRENT_CONSUMER_ID,
+        &CURRENT_SERVICE_ID
         );
 
     /* extract monthly-auto-refill-percentages */
@@ -2797,7 +2895,7 @@ bool load_constants(String jermCrypt_path, String save_dir)
 
         MONTHLY_AUTO_REFILL_PERCENTAGES = malloc(num_of_arps*sizeof(float*));
         if (MONTHLY_AUTO_REFILL_PERCENTAGES==NULL) memerror(stdout);
-        for(int i=0; i<num_of_arps; ++i)
+        for(unsigned int i=0; i<num_of_arps; ++i)
         {
             MONTHLY_AUTO_REFILL_PERCENTAGES[i] = malloc(sizeof(float)*2);
             if(MONTHLY_AUTO_REFILL_PERCENTAGES[i]==NULL) memerror(stdout);
@@ -2834,7 +2932,10 @@ bool load_constants(String jermCrypt_path, String save_dir)
 bool save_structure(String jermCrypt_path, String save_dir)
 {
     if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO save structure. glock NOT INITIALISED. did you call init?"); 
         return false;
+    }
 
     //printf("save structure\n");
 
@@ -3090,7 +3191,10 @@ bool load_structure(String jermCrypt_path, String save_dir)
     */
 
     if(!GLOCK_INITIALISED)
+    {
+        fprintf(stdout, "FAILED TO load structure. glock NOT INITIALISED. did you call init?"); 
         return false;
+    }
 
     //printf("load structure\n");
 
@@ -3690,7 +3794,7 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
 
         MONTHLY_AUTO_REFILL_PERCENTAGES = malloc(num_of_arps*sizeof(float*));
         if (MONTHLY_AUTO_REFILL_PERCENTAGES==NULL) memerror(stdout);
-        for(int i=0; i<num_of_arps; ++i)
+        for(unsigned int i=0; i<num_of_arps; ++i)
         {
             MONTHLY_AUTO_REFILL_PERCENTAGES[i] = malloc(sizeof(float)*2);
             if(MONTHLY_AUTO_REFILL_PERCENTAGES[i]==NULL) memerror(stdout);
@@ -3706,4 +3810,214 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
     }
 
     return status;
+}
+
+bool search_investments(time_t search_from, time_t search_to, 
+    unsigned int months_returned_from, unsigned int months_returned_to,
+    String type, String _fout)
+{
+    /* _fout will be a json file 
+        
+        - if search_from or search_to is 0, search will not be based on investment date.
+        - type is either "all" or one of the investment packages ie Saphire, Ruby or Diamond 
+     * */
+
+    FILE *fout = fopen(_fout,"w");
+    if(!fout) 
+        return false;
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO search investments. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
+    bool status = false;
+
+    bool search_by_date = (!search_from) || (!search_to) ? false : true;
+    bool search_by_type = strcmp(type,"all") ? true : false;
+    bool search_by_months_returned = (!months_returned_from) || (!months_returned_to) ? false : true;
+
+    if(search_by_date && search_from>=search_to)
+    {
+        fprintf(fout,"invalid <search_from-search_to> data provided. <search_from> must be lesser than <search_to>");
+        fclose(fout);
+        return status;
+    }
+    if(search_by_months_returned && 
+        ((months_returned_from>=months_returned_to) || (months_returned_to>12))
+    )
+    {
+        fprintf(fout,"invalid <months_returned_from-months_returned_to> data provided."
+                     " <months_returned_from> must be lesser than <months_returned_to>"
+                     " and <months_returned_to> must be <=12");
+        fclose(fout);
+        return status;
+    }
+
+    fprintf(fout,"{\"results\":[");
+
+    if(HEAD)
+    {
+        AccountPointer ap = HEAD->next;
+        Account acc;
+        Investment inv;
+        
+        bool started_writting = false;
+        
+        struct tm *lt;
+        
+        while(ap)
+        {
+            acc = ap->account;
+            inv = acc->investments;
+            while(inv)
+            {
+                if(search_by_date)
+                {
+                    if((inv->date<search_from) || (inv->date>search_to))
+                    {
+                        inv = inv->next;
+                        continue;
+                    }
+                }
+                if (search_by_type)
+                {
+                    if(strcmp(type,inv->package))
+                    {
+                        inv = inv->next;
+                        continue;
+                    }
+                }
+                if (search_by_months_returned)
+                {
+                    if((inv->months_returned<months_returned_from) || 
+                        (inv->months_returned>months_returned_to)
+                    )
+                    {
+                        inv = inv->next;
+                        continue;
+                    }
+                }
+                
+                // if all search criteria is passed...
+                // write data as: []
+
+                if (started_writting)
+                    fprintf(fout, ",");
+                started_writting = true;
+
+                lt = localtime(&(inv->date));
+                fprintf(fout, "[\"%d/%d/%d\", \"%s\", %.2f, %d]",
+                    lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                    inv->package, inv->amount*POINT_FACTOR, inv->months_returned
+                );
+
+                /*
+                fprintf(stdout, " [\"%d/%d/%d\", %s, %.2f, %d]\n",
+                    lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+                    inv->package, inv->amount/POINT_FACTOR, inv->months_returned
+                );
+                */
+                
+                inv = inv->next;
+            }
+            
+            ap = ap->next;
+        }
+    }
+
+    fprintf(fout,"]}");
+
+    fclose(fout);
+    status = true;
+    return status;
+}
+
+Consumer register_consumer(String names, FILE *fout)
+{
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO increment PV. glock NOT INITIALISED. did you call init?"); 
+        return NULL;
+    }
+
+    Consumer new_consumer = malloc(sizeof(struct consumer));
+
+    if (new_consumer==NULL) memerror(fout);
+
+    time(&(new_consumer->date));
+    new_consumer->names = NULL;
+
+    pthread_mutex_lock(&glock);
+    new_consumer->id = (++CURRENT_CONSUMER_ID);
+    pthread_mutex_unlock(&glock);
+
+    new_consumer->pv = 0.0;
+    new_consumer->available_balance = 0.0;
+    new_consumer->total_returns = 0.0;
+    new_consumer->total_redeems = 0.0;
+
+    new_consumer->commissions = NULL;
+    new_consumer->last_commission = NULL;
+
+    new_consumer->withdraws = NULL;
+    new_consumer->last_withdraw = NULL;
+    
+    new_consumer->services = NULL;
+    new_consumer->last_service = NULL;
+
+    unsigned int buff_length;
+    String name_strings[] = {names, "\0"};
+    length_of_all_strings(name_strings, &buff_length);
+
+    new_consumer->names = malloc(sizeof(char)*(buff_length+1));
+    if(new_consumer->names==NULL) {gfree(new_consumer); memerror(fout);}
+    join_strings(new_consumer->names,name_strings);
+
+    ConsumerPointer cp = malloc(sizeof(struct consumer_pointer));
+    if (cp==NULL)
+    {
+        gfree(new_consumer->names);
+        gfree(new_consumer);
+        memerror(fout);
+    }
+
+    cp->consumer = new_consumer;
+    cp->next = NULL;
+    cp->prev = NULL;
+
+    pthread_mutex_lock(&glock);
+
+    if (CONSUMER_HEAD->next==NULL)
+    {
+        CONSUMER_HEAD->next = cp;
+        cp->prev = CONSUMER_HEAD;
+    }
+    else
+    {
+        cp->prev = CONSUMER_TAIL;
+        CONSUMER_TAIL->next = cp;        
+    }
+
+    CONSUMER_TAIL = cp;
+
+    pthread_mutex_unlock(&glock);
+
+
+    return new_consumer;
+
+}
+
+ID register_new_consumer(String names, String fout_name)
+{
+    FILE *fout = fopen(fout_name,"w");
+    if(!fout) 
+        return 0;
+
+    ID new_id = consumer_id(register_consumer(names, fout));
+    
+    fclose(fout);
+    
+    return new_id;
 }

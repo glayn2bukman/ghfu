@@ -7,6 +7,9 @@ int main()
     float ACF = 16.0, SAPHIRE=700, RUBY=900, DIAMOND=1100; // account-creation-fee 
 
     Account b1 = register_member(NULL, "B1",ACF+DIAMOND,false,stdout);
+    
+    if(!b1) // no available investments...
+        exit(1);
 
     Account b2 = register_member(b1, "B2",ACF+DIAMOND,false,stdout);
     //buy_property(b2,60*4,false,stdout);
@@ -77,6 +80,15 @@ int main()
 
     save_structure("lib","test");
     dump_constants("lib","test");
+
+    //search_investments(0,0,0,0,"all","test/invs","test/invs-error");
+    
+    /*
+    ID c1 = register_new_consumer("consumer 1", "test/consumer");
+    Consumer c =  get_consumer_by_id(c1);
+    printf("c is NULL: %s\n",NULL==c ? "true" : "false");
+    printf("names: %s\ntime: %ld", c->names, c->date);
+    */
     
     return 0;
 }

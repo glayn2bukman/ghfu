@@ -2,4 +2,4 @@
 2) .jermCrypt                   # password
 3) .jpesa                       # api-uname;pswd
 4) .known_clients               # each IP on a new line
-5) .monthly_operations_code     #pasword
+5) .monthly_operations_code     # pasword
