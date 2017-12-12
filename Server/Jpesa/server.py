@@ -78,7 +78,7 @@ def deposit(number, amount, code):
     
     amount = int(amount)
     
-    if amount<500 or amount>4950000:
+    if amount<1,000 or amount>4950000:
         reply["log"] = "amount must be in the range SHS 1,000-4,950,000"
         return reply
     

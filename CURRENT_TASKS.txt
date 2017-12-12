@@ -1,0 +1,5 @@
+- in upgrading consumer account, the uplink can change from the system account to the new broker who
+  convinced the tenant/consumer to join the main ghfu system. revert changes in terms of "children" in
+  the previous system uplink account and add the consumer account to the new uplink's children...
+  A lot of shit can go wrong here so take extra fucking care!
+- update save/load structure functions to accomodate consumer-account details

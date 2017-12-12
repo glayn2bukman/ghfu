@@ -418,19 +418,27 @@ def register():
 
         if (not dummy_id) and ((not info(logfile)) or (info(logfile)==FILE_NOT_FOUND)):
             rm(logfile)
-            new_internal_code = get_random_code()
-            CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
-            
-            er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
-            ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+            if deposit:
+                new_internal_code = get_random_code()
+                CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+                
+                er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
+                ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
 
-            threading.Thread(target=depost_funds_to_jpesa, 
-                args=(new_internal_code,number, deposit*(er+ri), 
-                    libghfu.register_new_member,(uplink_id, names, deposit, 0, logfile)),
-                kwargs={"logfile":logfile, "update_structure":True}).start()
-            
-            reply["status"] = True
-            reply["code"] = new_internal_code
+                threading.Thread(target=depost_funds_to_jpesa, 
+                    args=(new_internal_code,number, deposit*(er+ri), 
+                        libghfu.register_new_member,(uplink_id, names, deposit, 0, logfile)),
+                    kwargs={"logfile":logfile, "update_structure":True}).start()
+                
+                reply["status"] = True
+                reply["code"] = new_internal_code
+            else:
+                new_id = libghfu.register_new_member(uplink_id, names, deposit, 0, logfile)
+                if info(logfile): 
+                    reply["log"] = info(logfile)
+                else:
+                    reply["id"] = new_id
+                rm(logfile)
         else:
             reply["log"] = info(logfile)
             rm(logfile)
@@ -551,12 +559,12 @@ def buy_package():
         new_internal_code = get_random_code()
         CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
         
-        er = c_int.in_dll(libghfu, "EXCHANGE_RATE").value
-        ri = c_int.in_dll(libghfu, "RATE_INFLATE").value
+        # for services and property, the amount is in UGX and not UDS like investments and registration
+        fper = c_int.in_dll(libghfu, "FIXED_PROPERTY_EXCHANGE_RATE").value
 
         threading.Thread(target=depost_funds_to_jpesa, 
-            args=(new_internal_code,number, amount*(er+ri), 
-                libghfu.purchase_property,(IB_id, c_float(amount), 0, logfile)),
+            args=(new_internal_code,number, amount, 
+                libghfu.purchase_property,(IB_id, c_float(amount/float(fper)), 0, logfile)),
             kwargs={"logfile":logfile, "update_structure":True}).start()
         
         reply["status"] = True

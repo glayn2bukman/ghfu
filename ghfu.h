@@ -88,6 +88,42 @@ typedef struct investment
     struct investment *prev;
 } *Investment;
 
+typedef struct payment
+{
+    time_t date;    
+    Amount amount;
+
+    time_t next_payment_date; // calculated from <amount> and Service->unit_price and Service->payment_day
+
+    struct payment *next;
+    struct payment *prev;
+
+} *Payment;
+
+typedef struct service
+    /* ghfu services such as house-renting, garbage collection, etc
+       the system assumes all services are paid monthly, for services not paid this way, re-factor to 
+       conform to this logic eg if a service is paid once every 6 months, let the system think its paid
+       monthly and et the unit_price to price/6
+    */
+{
+    bool active; // you dont wanna waste time on innactive services...eg the tenant can leave the house
+
+    String name;
+    ID id; // one house can have multiple rented rooms each with its own unique ID
+
+    time_t acquisition_date;
+
+    Amount unit_price;
+    
+    Payment payments;
+    Payment last_payment;
+
+    struct service *next;
+    struct service *prev;
+
+} *Service;
+
 typedef struct account_pointer
 {
     void *account;
@@ -100,6 +136,7 @@ typedef struct account_pointer
 typedef struct account
 {
     time_t date; // account-creation date...
+    bool is_consumer;
     ID id;
     String names;
     Amount pv; /* Personal Volume (the backbone of all commissions and bonuses) */
@@ -129,6 +166,9 @@ typedef struct account
     Withdraw withdraws;
     Withdraw last_withdraw;
 
+    Service services;
+    Service last_service;
+
     unsigned int rank;
     unsigned int highest_leg_ranks[3];
 
@@ -148,101 +188,41 @@ typedef struct child
     
 } *Child;
 
-typedef struct payment
-{
-    time_t date;    
-    Amount amount; // in UGX NOT $
-
-    time_t next_payment_date; // calculated from <amount> and Service->unit_price and Service->payment_day
-
-} *Payment;
-
-typedef struct service
-    /* ghfu services such as house-renting, garbage collection, etc
-       the system assumes all services are paid monthly, for services not paid this way, re-factor to 
-       conform to this logic eg if a service is paid once every 6 months, let the system think its paid
-       monthly and et the unit_price to price/6
-    */
-{
-    bool active; // you dont wanna waste time on innactive services...eg the tenant can leave the house
-
-    String name;
-    ID id; // one house can have multiple rented rooms each with its own unique ID
-
-    time_t acquisition_date;
-    time_t payment_day;
-    time_t last_payment_date;
-    time_t next_payment_date; // not the exact date but rather, when the date SHOULD have been paid!
-
-    // these 2 values below are in UGX NOT $ and so this money cant be counted together with
-    // the main system float!!!
-    Amount unit_price;
-    
-    Payment *payments;
-    Payment *last_payment;
-
-    struct service *next;
-    struct service *prev;
-
-} *Service;
-
-typedef struct consumer
-    /* data structure describing ghfu-consumers such as tenants */
-{
-    time_t date; // consumer_account_creation_date
-    String names;
-    ID id;
-
-    Amount pv;
-    Amount available_balance;
-    Amount total_returns;
-    Amount total_redeems;
-
-    Commission commissions;
-    Commission last_commission;
-
-    Withdraw withdraws;
-    Withdraw last_withdraw;
-    
-    Service services;
-    Service last_service;
-
-} *Consumer;
-
-typedef struct consumer_pointer
-{
-    Consumer consumer;
-
-    struct consumer_pointer *next;
-    struct consumer_pointer *prev;
-    
-} *ConsumerPointer;
 
 double SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS; // used double not float. float<4.4 billion
-ID ACTIVE_ACCOUNTS, CURRENT_ID, AVAILABLE_INVESTMENTS, CURRENT_CONSUMER_ID, CURRENT_SERVICE_ID;
+ID ACTIVE_ACCOUNTS, CURRENT_ID, AVAILABLE_INVESTMENTS, CURRENT_SERVICE_ID;
 
 AccountPointer HEAD, TAIL;
-ConsumerPointer CONSUMER_HEAD, CONSUMER_TAIL;
 
 /* function prototypes */
 void memerror(FILE *fout);
 void init(String jermCrypt_path, String save_dir);
 bool increment_pv(Account account, const Amount points, FILE *fout);
 bool award_commission(Account account, const Amount points, const String commission_type, String reason, FILE *fout);
-bool invest_money(Account account, const Amount amount, const bool update_system_float, bool test_feasibility, FILE *fout);
-bool invest(ID account_id, const Amount amount, const bool update_system_float, bool test_feasibility, String fout_name);
-Account register_member(Account uplink, String names, Amount amount, bool test_feasibility, FILE *fout);
-ID register_new_member(ID uplink_id, String names, Amount amount, bool test_feasibility, String fout_name);
+bool invest_money(Account account, const Amount amount, const bool update_system_float, const bool test_feasibility, FILE *fout);
+bool invest(ID account_id, const Amount amount, const bool update_system_float, const bool test_feasibility, const String fout_name);
+Account register_member(Account uplink, String names, Amount amount, const bool test_feasibility, FILE *fout);
+ID register_new_member(ID uplink_id, String names, Amount amount, const bool test_feasibility, const String fout_name);
 
-bool buy_property(Account IB_account, const Amount amount, bool test_feasibility, FILE *fout);
-bool purchase_property(ID IB_account_id, const Amount amount, bool test_feasibility, String fout_name);
+bool buy_property(Account IB_account, const Amount amount, const bool test_feasibility, FILE *fout);
+bool purchase_property(ID IB_account_id, const Amount amount, const bool test_feasibility, const String fout_name);
 bool auto_refill(Account account, FILE *fout);
 bool raise_rank(Account account, FILE *fout);
 bool calculate_tvc(Account account, FILE *fout);
 bool award_rank_monthly_bonuses(Account account, FILE *fout);
 
-Consumer register_consumer(String names, FILE *fout);
-ID register_new_consumer(String names, String fout_name);
+/* functions to upgrade account from consumer to ghfu member */
+bool upgrade_account(Account account, const Amount amount, const bool test_feasibility, FILE *fout);
+bool upgrade_consumer_account(ID account_id, const Amount amount, const bool test_feasibility, const String fout_name);
+
+/* service functions */
+bool create_new_service(Account account, const ID service_id, const String service_name, const Amount unit_price, 
+    const Amount amount, const bool test_feasibility, FILE *fout);
+bool register_new_service(ID account_id, const ID service_id, const String service_name, const Amount unit_price, 
+    const Amount amount, const bool test_feasibility, String fout_name);
+
+bool pay_for_service(Account account,const ID service_id, const Amount amount,const bool test_feasibility, FILE *fout);
+bool pay_for_consumer_service(ID account_id, const ID service_id, const Amount amount,const bool test_feasibility, const String fout_name);
 
 /* functions to visually display accounts */
 void show_commissions(const Account account);
@@ -268,9 +248,7 @@ void length_of_all_strings(String strings[], unsigned int *length);
 void join_strings(char buff[], const String strings[]);
 
 Account get_account_by_id(const ID id);
-Consumer get_consumer_by_id(const ID id);
 ID account_id(Account account);
-ID consumer_id(Consumer consumer);
 
 bool monthly_operations(FILE *fout);
 bool perform_monthly_operations(String fout_name);
@@ -301,3 +279,6 @@ pthread_mutex_t glock;
 bool search_investments(time_t search_from, time_t search_to, 
     unsigned int months_returned_from, unsigned int months_returned_to,
     String type, String _fout);
+
+void get_next_payment_date(const time_t *current_date, time_t *next_date, const unsigned short int months);
+void set_service_aquisition_date(time_t *date);

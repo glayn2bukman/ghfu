@@ -15,7 +15,8 @@ bool DATA_FILE_PRESENT=false;
 bool GLOCK_INITIALISED = false;
 
 /* how many seconds are in one month */
-unsigned long GHFU_MONTH = 30*24*60*60;
+const unsigned long GHFU_MONTH = 30*24*60*60;
+const unsigned long GHFU_DAY = 24*60*60;
 
 /* the conversion factor from amount($) to points */
 #define TBB_MAX_GENERATIONS 7
@@ -25,7 +26,7 @@ unsigned int PAYMENT_DAY = 28; /* any day from 1'st to 28'th (29+ may be absent 
 unsigned int LAST_INVESTMENT_DAY = 14; /* we can only get investment money on so many days in a given month */
 
 /* account fees($) they sohuld tally up to $400.0*/
-float ACCOUNT_CREATION_FEE = 16.0; /* $ */
+float ACCOUNT_CREATION_FEE = 20.0; /* $ */
 float ANNUAL_SUBSCRIPTION_FEE = 0.0; /* $ */
 float OPERATIONS_FEE = 400.0; /* $ */
 
@@ -40,8 +41,10 @@ float INVESTMENTS[4]={
 };
 
 /* exchange rate related variables */
-int RATE_INFLATE = 50;
-int EXCHANGE_RATE=3600; /* 
+unsigned short int RATE_INFLATE = 50;
+const unsigned int FIXED_PROPERTY_EXCHANGE_RATE = 3600; // this value is fixed and is only used in buying 
+                                                  // property/services in UGX 
+unsigned int EXCHANGE_RATE=3600; /* 
                         deposit rate is always <RATE_INFLATE> more while withdraw value is always 
                         RATE_INFLATE less.
                         also, this value can be modified anytime using uri </update_exchange_rate> but once
@@ -80,6 +83,13 @@ char *ERRORS[] = {
     /*23*/ "RETURNS TOPPED UP TO AQUIRE MINIMUM ALLOWABLE INVESTMENT PROFIT",
     /*24*/ "THIS ACCOUNT BELONGS TO THE SYSTEM. YOU CANT REDEEM ITS POINTS",
     /*25*/ "NO MORE INVESTMENTS ALLOWED AT THE MOMENT. PLEASE INQUIRE WITH ADMIN WHEN OPPORTUNITIES MIGHT BE OPEN AGAIN",
+    /*26*/ "CANT CREATE CONSUMER ACCOUNT, NO SYSTEM ACCOUNT ACCOUNT FOUND",
+    /*27*/ "CONSUMER ACCOUNT DOES NOT HAVE PREVILEDGE TO PERFORM THIS OPERATION",
+    /*28*/ "NO ACCOUNT MATCHING THAT ID",
+    /*29*/ "CONSUMER ACCOUNT CAN NOT BE AN UPLINK",
+    /*30*/ "CONSUMER ACCOUNT IS FREE. NO FEE SHOULD BE PAID",
+    /*31*/ "ACCOUNT DINT SUBSCRIBE TO SPECIFIED SERVICE",
+    /*32*/ "CANT PAY FOR SERVICE IN FRACTIONS",
 };
 
 /* montlhy auto-refill percentages (defaults, lower limits)
@@ -203,5 +213,9 @@ float HOB = .1; /* home-office-bonus */
 float LCB = .1; /* laxury-car-bonus */
 float EAB = .03; /* expense-account-bonus */
 
-/* consumer rebet (discount paied for customer who pays in time) (%)*/
-float CONSUMER_DISCOUNT = 10.0; // this value is a %ge
+/* consumer rebets (discount paied for customers who pays in time) (%)*/
+float CONSUMER_REBETS[] = 
+{
+    10.0, // paid to some1 who pays before or on the payment_day
+    5.0 // paid to some1 who pays not later than a week after the payment_day
+};

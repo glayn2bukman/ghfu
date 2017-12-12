@@ -4,12 +4,17 @@ int main()
 {
 	init("lib","test");
 
-    float ACF = 16.0, SAPHIRE=700, RUBY=900, DIAMOND=1100; // account-creation-fee 
+    float ACF = 20.0, SAPHIRE=700, RUBY=900, DIAMOND=1100; // account-creation-fee 
 
     Account b1 = register_member(NULL, "B1",ACF+DIAMOND,false,stdout);
-    
+
     if(!b1) // no available investments...
         exit(1);
+
+    Account c1 = register_member(b1, "Consumer 1",0,false,stdout);
+    create_new_service(c1,23,"rent",110,110*3,false,stdout);
+    pay_for_service(c1,23,110*9,false,stdout);
+    upgrade_account(c1,ACF+RUBY,false,stdout);
 
     Account b2 = register_member(b1, "B2",ACF+DIAMOND,false,stdout);
     //buy_property(b2,60*4,false,stdout);
@@ -34,7 +39,6 @@ int main()
 
     Account b11 = register_member(b9, "B11",ACF+DIAMOND,false,stdout);
     Account b12 = register_member(b10, "B12",ACF+RUBY,false,stdout);
-
 
     float monhtly_auto_refill_percentages[13][4][2] = {
         /* all arrays MUST be in descending rank order and MUST end with the {0,0} terminating condition */
@@ -76,6 +80,7 @@ int main()
 
 
     structure_details(b1);
+    structure_details(c1);
     dump_structure_details(b1->id, "test/test.json");
 
     save_structure("lib","test");
@@ -89,6 +94,6 @@ int main()
     printf("c is NULL: %s\n",NULL==c ? "true" : "false");
     printf("names: %s\ntime: %ld", c->names, c->date);
     */
-    
+            
     return 0;
 }
