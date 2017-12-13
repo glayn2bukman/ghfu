@@ -5,7 +5,7 @@
 
 CC = gcc#clang
 CFLAGS = -Wall -Wextra
-CLIBFLAGS = -O3 -shared -fPIC -Wall -Wextra
+CLIBFLAGS = -O3 -shared -fPIC -Wall -Wextra -g
 
 # the .so lib
 libghfu: data.h ghfu.h ghfu.c lib/libjermCrypt.so

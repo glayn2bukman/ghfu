@@ -188,9 +188,16 @@ typedef struct child
     
 } *Child;
 
+typedef struct gpath
+    // path variables for dealing with ghfu data
+{
+    String jerm_crypt_path, data_files_path;
+} *GPath;
+
 
 double SYSTEM_FLOAT, CUMULATIVE_COMMISSIONS, COMMISSIONS; // used double not float. float<4.4 billion
 ID ACTIVE_ACCOUNTS, CURRENT_ID, AVAILABLE_INVESTMENTS, CURRENT_SERVICE_ID;
+GPath GPATHS;
 
 AccountPointer HEAD, TAIL;
 
@@ -212,8 +219,8 @@ bool calculate_tvc(Account account, FILE *fout);
 bool award_rank_monthly_bonuses(Account account, FILE *fout);
 
 /* functions to upgrade account from consumer to ghfu member */
-bool upgrade_account(Account account, const Amount amount, const bool test_feasibility, FILE *fout);
-bool upgrade_consumer_account(ID account_id, const Amount amount, const bool test_feasibility, const String fout_name);
+bool upgrade_account(Account account, Account new_uplink, const Amount amount, const bool test_feasibility, FILE *fout);
+bool upgrade_consumer_account(ID account_id, ID new_uplink_id, const Amount amount, const bool test_feasibility, const String fout_name);
 
 /* service functions */
 bool create_new_service(Account account, const ID service_id, const String service_name, const Amount unit_price, 
@@ -223,6 +230,9 @@ bool register_new_service(ID account_id, const ID service_id, const String servi
 
 bool pay_for_service(Account account,const ID service_id, const Amount amount,const bool test_feasibility, FILE *fout);
 bool pay_for_consumer_service(ID account_id, const ID service_id, const Amount amount,const bool test_feasibility, const String fout_name);
+
+bool change_service_status(Account account, ID service_id, bool new_status, FILE *fout);
+bool update_service_status(const ID account_id, const ID service_id, const bool new_status, const String fout_name);
 
 /* functions to visually display accounts */
 void show_commissions(const Account account);
@@ -267,6 +277,9 @@ bool save_structure(String jermCrypt_path, String save_dir);
        leaks in case load_structure is called outside init or if init is called more than once. y got the extra
        mile? well, because people are NOT good at reading documentation and more so following it! 
     */
+// auto-save function...
+void gsave();
+
 bool load_constants(String jermCrypt_path, String save_dir);
 bool load_structure(String jermCrypt_path, String save_dir);
 

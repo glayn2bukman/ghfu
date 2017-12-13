@@ -14,10 +14,11 @@ int main()
     Account c1 = register_member(b1, "Consumer 1",0,false,stdout);
     create_new_service(c1,23,"rent",110,110*3,false,stdout);
     pay_for_service(c1,23,110*9,false,stdout);
-    upgrade_account(c1,ACF+RUBY,false,stdout);
 
     Account b2 = register_member(b1, "B2",ACF+DIAMOND,false,stdout);
     //buy_property(b2,60*4,false,stdout);
+
+    upgrade_account(c1,b2,ACF+RUBY,false,stdout);
 
     Account b3 = register_member(b2, "B3",ACF+RUBY,false,stdout);
 
@@ -80,11 +81,14 @@ int main()
 
 
     structure_details(b1);
+    structure_details(b2);
     structure_details(c1);
     dump_structure_details(b1->id, "test/test.json");
 
-    save_structure("lib","test");
-    dump_constants("lib","test");
+    gsave();
+
+    dump_structure_details(c1->id, "test/test.json");
+
 
     //search_investments(0,0,0,0,"all","test/invs","test/invs-error");
     

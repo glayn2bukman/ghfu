@@ -1,5 +1,8 @@
-- in upgrading consumer account, the uplink can change from the system account to the new broker who
-  convinced the tenant/consumer to join the main ghfu system. revert changes in terms of "children" in
-  the previous system uplink account and add the consumer account to the new uplink's children...
-  A lot of shit can go wrong here so take extra fucking care!
-- update save/load structure functions to accomodate consumer-account details
+- add autosave functionality directly in C such that the secondary languages calling libghfu.so dont have to.
+  every function that makes an update to the system should call the auto save. however, this can wait...infact,
+  the current implementation lets the user entirely decide when they would like to save changes to the system
+
+/* data monitoring functions */
+- function to show/search all serives whose payment day is near (a week)
+- function to show/search all serives whose payment day is past (a week+)
+- function to show/search what services haven't been cleared for the security month

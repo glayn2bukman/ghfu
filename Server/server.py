@@ -183,13 +183,7 @@ however, this value just is suspicious and we aint gonna use it!".format(value))
                         c_float.in_dll(libghfu, "WITHDRAW_CHARGE").value*.01*c_int.in_dll(libghfu, "EXCHANGE_RATE").value)
                     MINIMUM_WITHDRAW = int(MINIMUM_WITHDRAW)+1
 
-                    threading.Thread(target=libghfu.save_structure, args=(
-                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
-                        )).start()
-
-                    threading.Thread(target=libghfu.dump_constants, args=(
-                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
-                        )).start()
+                    threading.Thread(target=libghfu.gsave, args=()).start()
                     
             except:
                 server_log("is the exchange-rates url right? cnt find the index of \" UGX\" in it")
@@ -242,9 +236,7 @@ def effect_transaction(code, reference, func=None, args=None, logfile=None, upda
                 CODES[code]["details"] = reply
                 CODES[code]["actionlog"] = ""
                 if update_structure:
-                    threading.Thread(target=libghfu.save_structure, args=(
-                        os.path.join(path,"lib"), os.path.join(path,"files","saves")
-                        )).start()
+                    threading.Thread(target=libghfu.gsave, args=()).start()
 
             CODES[code]["delete"] = True
                                     
@@ -644,9 +636,7 @@ def set_data_constants():
     for key in reply:
         if reply[key]:
 
-            threading.Thread(target=libghfu.dump_constants, args=(
-                os.path.join(path,"lib"), os.path.join(path,"files","saves")
-                )).start()
+            threading.Thread(target=libghfu.gsave, args=()).start()
 
             break
 
@@ -823,9 +813,7 @@ def perform_monthly_operations():
     if libghfu.perform_monthly_operations(logfile):
         rm(logfile)
 
-        threading.Thread(target=libghfu.save_structure, args=(
-            os.path.join(path,"lib"), os.path.join(path,"files","saves")
-            )).start()
+        threading.Thread(target=libghfu.gsave, args=()).start()
 
         return reply_to_remote(jencode({"status":True, "log":""}))
 
