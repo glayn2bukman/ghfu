@@ -46,7 +46,7 @@ typedef float Amount;
 typedef char *String;
 
 typedef unsigned int bool;
-enum {false, true};
+enum {false, true, neutral}; // <neutral> is used in search_* functions where a bool may not be true/false but any of the two!
 
 
 typedef struct withdraw
@@ -294,7 +294,7 @@ bool search_investments(const time_t search_from, const time_t search_to,
     const String type, const String fout_name);
 
 bool search_services(const String consumer_name, const String service_name, 
-    const bool service_acquisition_date, const bool service_paid, 
+    const time_t service_acquisition_date, const bool service_paid, 
     const bool service_active, const bool security_month_paid, const String fout_name);
 
 void get_next_payment_date(const time_t *current_date, time_t *next_date, const unsigned short int months);

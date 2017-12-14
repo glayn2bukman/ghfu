@@ -4469,7 +4469,7 @@ bool update_service_status(const ID account_id, const ID service_id, const bool 
 }
 
 bool search_services(const String consumer_name, const String service_name, 
-    const bool service_acquisition_date, const bool service_paid, 
+    const time_t service_acquisition_date, const bool service_paid, 
     const bool service_active, const bool security_month_paid, const String fout_name)
 {
     /*
@@ -4530,7 +4530,7 @@ bool search_services(const String consumer_name, const String service_name,
             if(
                 (service_acquisition_date > service->acquisition_date) ||
                 (search_specific_service && strcmp(service->name, service_name)) ||
-                (service_active != service->active)
+                ((service_active!=neutral) && (service_active != service->active))
             )
             {
                 service = service->next;
@@ -4543,8 +4543,8 @@ bool search_services(const String consumer_name, const String service_name,
             service_has_security_month = !service_currently_paid ? false : 
                 ((service->last_payment->next_payment_date)-today > GHFU_MONTH ? true : false);
             
-            if ((service_currently_paid!=service_paid) || 
-                (service_has_security_month!=security_month_paid)
+            if (((service_paid!=neutral) && (service_currently_paid!=service_paid)) || 
+                ((security_month_paid!=neutral) && (service_has_security_month!=security_month_paid))
             )
             {
                 service = service->next;
