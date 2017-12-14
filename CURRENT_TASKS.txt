@@ -3,6 +3,9 @@
   the current implementation lets the user entirely decide when they would like to save changes to the system
 
 /* data monitoring functions */
+- function to show/search services by status ie active/inactive. innactive services show for example
+  houses that are nolonger occupied
+- function to show/search all unpaid services
 - function to show/search all serives whose payment day is near (a week)
 - function to show/search all serives whose payment day is past (a week+)
 - function to show/search what services haven't been cleared for the security month

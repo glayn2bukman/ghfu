@@ -815,19 +815,20 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
         
         ap->account = new_account;
         ap->next = NULL;
+        ap->prev = NULL;
 
         pthread_mutex_lock(&glock);
         
         if (!is_consumer)
         {
-            if(!(uplink->children)) { ap->prev = NULL; uplink->children = ap;}
+            if(!(uplink->children)) uplink->children = ap;
             else { ap->prev = uplink->last_child; uplink->last_child->next = ap;}
 
             uplink->last_child = ap;
         }
         else
         {
-            if(!(new_account->uplink->children)) { ap->prev = NULL; new_account->uplink->children = ap;}
+            if(!(new_account->uplink->children)) new_account->uplink->children = ap;
             else { ap->prev = new_account->uplink->last_child; new_account->uplink->last_child->next = ap;}
 
             new_account->uplink->last_child = ap;
@@ -870,6 +871,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
 
     ap->account = new_account;
     ap->next = NULL;
+    ap->prev = NULL;
 
     pthread_mutex_lock(&glock);
 
@@ -3166,9 +3168,9 @@ bool save_structure(String jermCrypt_path, String save_dir)
 
             while(service)
             {
-                fprintf(fout, "%d\x1%ld\x1%ld\x1%ld\x1%s",
+                fprintf(fout, "%d\x1%ld\x1%ld\x1%.2f\x1%ld\x1%s",
                     service->active, service->id, service->acquisition_date,
-                    strlen(service->name), service->name
+                    service->unit_price, strlen(service->name), service->name
                     );
                     
                 // now deal with payments...
@@ -3731,8 +3733,15 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 // fuck it. if you get a memory error here, lets just hope the program terminates in memerror!
                 memerror(stdout);
 
-            fscanf(fin,"%d\x1%ld\x1%ld\x1",
-                &(new_service->active), &(new_service->id), &(new_service->acquisition_date)
+            new_service->payments = NULL;
+            new_service->last_payment = NULL;
+
+            new_service->next = NULL;
+            new_service->prev = NULL;
+
+            fscanf(fin,"%d\x1%ld\x1%ld\x1%f\x1",
+                &(new_service->active), &(new_service->id), &(new_service->acquisition_date),
+                &(new_service->unit_price)
             );
 
             string_length = 0;
@@ -3751,9 +3760,6 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 --string_length;
                 ++string_index;
             } new_service->name[string_index]='\0';
-
-            new_service->payments = NULL;
-            new_service->last_payment = NULL;
 
             // payments...
             number_of_payments = 0;
@@ -3787,9 +3793,6 @@ bool load_structure(String jermCrypt_path, String save_dir)
             }
 
 
-            new_service->next = NULL;
-            new_service->prev = NULL;
-                            
             if(!(new_account->services))
                 new_account->services = new_service;
             else
@@ -3971,15 +3974,18 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
 
 bool search_investments(time_t search_from, time_t search_to, 
     unsigned int months_returned_from, unsigned int months_returned_to,
-    String type, String _fout)
+    String type, String fout_name)
 {
     /* _fout will be a json file 
         
         - if search_from or search_to is 0, search will not be based on investment date.
-        - type is either "all" or one of the investment packages ie Saphire, Ruby or Diamond 
-     * */
+        - type is either "all" or one of the investment packages ie Saphire, Ruby or Diamond
+        
+        fout_name: json file where results will be dumped in format 
+            {'results':[[date,pkg-name,amount,months-returned],...]}
+    */
 
-    FILE *fout = fopen(_fout,"w");
+    FILE *fout = fopen(fout_name,"w");
     if(!fout) 
         return false;
 
@@ -4014,7 +4020,7 @@ bool search_investments(time_t search_from, time_t search_to,
 
     fprintf(fout,"{\"results\":[");
 
-    if(HEAD)
+    if(HEAD->next)
     {
         AccountPointer ap = HEAD->next;
         Account acc;
@@ -4030,33 +4036,17 @@ bool search_investments(time_t search_from, time_t search_to,
             inv = acc->investments;
             while(inv)
             {
-                if(search_by_date)
+                if(
+                    (search_by_date && ((inv->date<search_from) || (inv->date>search_to))) ||
+                    (search_by_type && strcmp(type,inv->package)) ||
+                    (search_by_months_returned &&
+                    ((inv->months_returned<months_returned_from)||(inv->months_returned>months_returned_to)))
+                )
                 {
-                    if((inv->date<search_from) || (inv->date>search_to))
-                    {
-                        inv = inv->next;
-                        continue;
-                    }
+                    inv = inv->next;
+                    continue;
                 }
-                if (search_by_type)
-                {
-                    if(strcmp(type,inv->package))
-                    {
-                        inv = inv->next;
-                        continue;
-                    }
-                }
-                if (search_by_months_returned)
-                {
-                    if((inv->months_returned<months_returned_from) || 
-                        (inv->months_returned>months_returned_to)
-                    )
-                    {
-                        inv = inv->next;
-                        continue;
-                    }
-                }
-                
+
                 // if all search criteria is passed...
                 // write data as: []
 
@@ -4067,7 +4057,7 @@ bool search_investments(time_t search_from, time_t search_to,
                 lt = localtime(&(inv->date));
                 fprintf(fout, "[\"%d/%d/%d\", \"%s\", %.2f, %d]",
                     lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
-                    inv->package, inv->amount*POINT_FACTOR, inv->months_returned
+                    inv->package, inv->amount/POINT_FACTOR, inv->months_returned
                 );
 
                 /*
@@ -4476,4 +4466,125 @@ bool update_service_status(const ID account_id, const ID service_id, const bool 
     fclose(fout);
     return status;
 
+}
+
+bool search_services(const String consumer_name, const String service_name, 
+    const bool service_acquisition_date, const bool service_paid, 
+    const bool service_active, const bool security_month_paid, const String fout_name)
+{
+    /*
+        consumer_name: "all" will search through all members, otherwise specified member will be searched
+        service_name: "all" will search through all serives, otherwise specified service will be searched
+        service_acquisition_date: return services created on or after this date. 0 will return all
+        service_paid: 1/0
+        sercive_active: 1/0 .this is used to for example search for empty houses/room
+        security_month_paid: 1/0
+        fout_name: file where json data will be dumped in format
+            { "item-number":
+                [consumer-name,service-name,service-unit-price,last-payment-day,next-payment-day],
+                ...
+            }
+
+
+    */
+    FILE *fout = fopen(fout_name, "w");
+    if(!fout) return false;
+
+    if(!GLOCK_INITIALISED)
+    {
+        fprintf(fout, "FAILED TO search investments. glock NOT INITIALISED. did you call init?"); 
+        return false;
+    }
+
+    bool search_specific_consumer = strcmp(consumer_name,"all") ? true : false;
+    bool search_specific_service = strcmp(service_name,"all") ? true : false;
+
+    fprintf(fout, "{");
+
+    AccountPointer ap = HEAD->next;
+    Service service;
+    
+    bool started_writting=false;
+    bool service_currently_paid=false;
+    bool service_has_security_month=false;
+    
+    unsigned long number_of_results = 1;
+    
+    time_t today; time(&today);
+    struct tm *lpd, *npd; // next and last payment-day
+
+    while(ap)
+    {
+        if(
+            (search_specific_consumer && strcmp(((Account)(ap->account))->names, consumer_name))
+        )
+        {
+            ap = ap->next;
+            continue;
+        }
+
+        service = ((Account)(ap->account))->services;
+        
+        while(service)
+        {
+            if(
+                (service_acquisition_date > service->acquisition_date) ||
+                (search_specific_service && strcmp(service->name, service_name)) ||
+                (service_active != service->active)
+            )
+            {
+                service = service->next;
+                continue;                
+            }
+            
+            service_currently_paid = !(service->payments) ? false : 
+                (today <= (service->last_payment->next_payment_date) ? true : false);
+            
+            service_has_security_month = !service_currently_paid ? false : 
+                ((service->last_payment->next_payment_date)-today > GHFU_MONTH ? true : false);
+            
+            if ((service_currently_paid!=service_paid) || 
+                (service_has_security_month!=security_month_paid)
+            )
+            {
+                service = service->next;
+                continue;                
+            }
+
+            // when all search criteria is matched...
+            if (started_writting)
+                fprintf(fout, ",");
+            started_writting = true;
+
+            fprintf(fout,
+                "\"%ld\":[\"%s\",\"%s\",%.2f,",
+                number_of_results,
+                ((Account)(ap->account))->names, service->name, service->unit_price
+            );
+
+            if(!(service->payments))
+                fprintf(fout,"\"%s\",\"%s\"]","---","---");
+            else
+            {
+                lpd = localtime(&(service->last_payment->date));
+                npd = localtime(&(service->last_payment->next_payment_date));
+
+                fprintf(fout,"\"%d/%d/%d\",\"%d/%d/%d\"]",
+                    lpd->tm_mday,(lpd->tm_mon+1),(lpd->tm_year+1900),
+                    npd->tm_mday,(npd->tm_mon+1),(npd->tm_year+1900)
+                );
+            }
+
+            ++number_of_results;
+            service = service->next;
+        }
+
+        ap = ap->next;
+    }
+
+    fprintf(fout, "}");
+
+    fclose(fout);
+
+    return true;
 }

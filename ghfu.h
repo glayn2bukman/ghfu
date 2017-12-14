@@ -289,9 +289,13 @@ bool update_monthly_auto_refill_percentages(float auto_refill_percentages[][2], 
 pthread_mutex_t glock;
 
 /* data manipulation methods, to be used in place of database search calls */
-bool search_investments(time_t search_from, time_t search_to, 
-    unsigned int months_returned_from, unsigned int months_returned_to,
-    String type, String _fout);
+bool search_investments(const time_t search_from, const time_t search_to, 
+    const unsigned int months_returned_from, const unsigned int months_returned_to,
+    const String type, const String fout_name);
+
+bool search_services(const String consumer_name, const String service_name, 
+    const bool service_acquisition_date, const bool service_paid, 
+    const bool service_active, const bool security_month_paid, const String fout_name);
 
 void get_next_payment_date(const time_t *current_date, time_t *next_date, const unsigned short int months);
 void set_service_aquisition_date(time_t *date);

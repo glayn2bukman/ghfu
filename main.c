@@ -89,8 +89,8 @@ int main()
 
     dump_structure_details(c1->id, "test/test.json");
 
-
-    //search_investments(0,0,0,0,"all","test/invs","test/invs-error");
+    printf("\nsearched_investments? %d\n",search_investments(0,0,0,0,"all","test/invs"));
+    printf("\nsearched_services? %d\n",search_services("all","all",0,1,1,1,"test/services"));
     
     /*
     ID c1 = register_new_consumer("consumer 1", "test/consumer");
