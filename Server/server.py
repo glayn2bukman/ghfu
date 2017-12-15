@@ -21,27 +21,10 @@
         $ twistd web --wsgi Server.server # app=server, module=Server
 
 """
-# the most important interfaces to the dynamic library (libjermGHFU.so) are;
-#   ID account_id(Account account);
-#   bool dump_structure_details(ID account_id, String fout_name); 
-#   Account get_account_by_id(const ID id);
-#   ID account_id(Account account);
-#   bool invest(ID account_id, const Amount amount, const bool update_system_float, String fout_name);
-#   void perform_monthly_operations(float auto_refill_percentages[4][2], String fout_name);
-#   void purchase_property(ID IB_account_id, const Amount amount, const bool member, 
-#        const String buyer_names, String fout_name);
-#   bool redeem_account_points(ID account_id, Amount amount, String fout_path);
-#   ID register_new_member(ID uplink_id, String names, Amount amount, String fout_name);
-
-#   NB: String is defined as (char *) in ghfu.c. bool is defined as (enum bool {false, true}),
-#       ID is defined as (unsigned long)
-
-# ALL FUNCTIONS IN THIS SCRIPT SHOULD ACCEPT BOTH FORMS AND JSON DATA AS REQUEST(FOR FLEXIBILITY) BUT WILL 
-# ALWAYS RETURN JSON
 
 from flask import Flask, request, Response
 import os, sys, json, threading, time, random
-import requests
+import requests, datetime
 
 path = os.path.realpath(__file__)
 path = os.path.split(os.path.split(path)[0])[0]
@@ -73,6 +56,13 @@ libghfu.redeem_account_points.argtypes = [c_long, c_float, c_int, c_char_p]
 libghfu.register_new_member.argtypes = [c_long, c_char_p, c_float, c_int, c_char_p]
 libghfu.set_constant.argtypes = [c_char_p, c_float]
 libghfu.save_structure.argtypes = [c_char_p, c_char_p]
+
+libghfu.register_new_service.argtypes = [c_long, c_long, c_char_p, c_float, c_float, c_int, c_char_p]
+libghfu.pay_for_consumer_service.argtypes = [c_long, c_long, c_float, c_int, c_char_p]
+libghfu.update_service_status.argtypes = [c_long, c_long, c_int, c_char_p]
+
+libghfu.search_investments.argtypes = [c_long, c_long, c_int, c_int, c_char_p, c_char_p]
+libghfu.search_services.argtypes = [c_char_p, c_char_p, c_long, c_int, c_int, c_int, c_char_p]
 
 libghfu.account_id.restype = c_long
 
@@ -381,7 +371,7 @@ def register():
             reply["log"] = "silly form data provided for uplink(id) or deposit"
             return reply_to_remote(jencode(reply))
 
-    if (uplink_id==-1 or type(uplink_id)!=type(0)):
+    if (uplink_id<0 or type(uplink_id)!=type(0)):
         reply["log"] = "silly data provided; parameter <uplink_id>"
         return reply_to_remote(jencode(reply))
     if not names:
@@ -484,7 +474,7 @@ def details():
             reply["log"] = "silly form data provided; parameter <id>"
             return reply_to_remote(jencode(reply))
     
-    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+    if(account_id<0 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
         reply["log"] = "silly data provided; parameter <id>"
         return reply_to_remote(jencode(reply))
     
@@ -531,7 +521,7 @@ def buy_package():
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
 
-    if(IB_id==-1 or type(IB_id)!=type(0) or isinstance(IB_id,unicode) ):
+    if(IB_id<0 or type(IB_id)!=type(0) or isinstance(IB_id,unicode) ):
         reply["log"] = "silly data provided; parameter <id>"
         return reply_to_remote(jencode(reply))
     if(amount==0 or (not (type(amount)==type(0.0) or type(amount)==type(0))) or isinstance(amount,unicode) ):
@@ -675,10 +665,10 @@ def invest():
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
             
-    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+    if(account_id<0 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
         reply["log"] = "silly data provided; parameter <account_id>"
         return reply_to_remote(jencode(reply))
-    if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
+    if(amount<0 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
     if not number:
@@ -892,10 +882,10 @@ def transfer_funds_to_client_jpesa_account():
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
             
-    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+    if(account_id<0 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
         reply["log"] = "silly data provided; parameter <account_id>"
         return reply_to_remote(jencode(reply))
-    if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
+    if(amount<0 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
     if not email:
@@ -958,10 +948,10 @@ def transfer_funds_from_jpesa_to_mobile_money():
             reply["log"] = "silly form data provided"
             return reply_to_remote(jencode(reply))
             
-    if(account_id==-1 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
+    if(account_id<0 or type(account_id)!=type(0) or isinstance(account_id,unicode) ):
         reply["log"] = "silly data provided; parameter <account_id>"
         return reply_to_remote(jencode(reply))
-    if(amount==-1 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
+    if(amount<0 or (not(type(amount)!=type(0) or type(amount)!=type(0.0))) or isinstance(amount,unicode) ):
         reply["log"] = "silly data provided; parameter <amount>"
         return reply_to_remote(jencode(reply))
     if not number:
@@ -995,6 +985,348 @@ def transfer_funds_from_jpesa_to_mobile_money():
 
     return reply_to_remote(jencode(reply))
 
+@app.route("/search_investments", methods=["POST"])
+def search_investments():
+    """
+    if sucessfull, reply;
+    {
+        "status":True,
+        "log":"",
+        "results":[
+            [str invesmtne-date, str investment type, float amount, int months-returned],...
+        ]
+    }
+    """
+    
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    if json_req==None: json_req={}
+        
+    date_format = str(json_req.get("date_format","dd/mm/yyyy"))
+    search_from = str(json_req.get("search_from",""))
+    search_to = str(json_req.get("search_to",""))
+    months_returned_from = json_req.get("months_returned_from",0)
+    months_returned_to = json_req.get("months_returned_to",0)
+    investment_type = str(json_req.get("investment_type","all"))
+    
+    if search_from and (search_from.count("/")!=2):
+        reply["log"] = "silly date given for <search_from>"
+        return reply_to_remote(jencode(reply))
+    if search_to and (search_to.count("/")!=2):
+        reply["log"] = "silly date given for <search_to>"
+        return reply_to_remote(jencode(reply))
+    
+    if search_from:
+        try:
+            search_from = [int(fig) for fig in search_from.split("/")]
+        except:
+            reply["log"] = "silly date given for <search_from>"
+            return reply_to_remote(jencode(reply))
+    else: search_from = 0
+
+    if search_to:
+        try:
+            search_to = [int(fig) for fig in search_to.split("/")]
+        except:
+            reply["log"] = "silly date given for <search_to>"
+            return reply_to_remote(jencode(reply))
+    else: search_to = 0
+    
+    if search_from:
+        if date_format=="dd/mm/yyyy":
+            search_from.reverse()
+            search_from = int(datetime.datetime(*search_from).strftime("%s"))
+        else: # mm/dd/yyyy -> american style
+            search_from = int(datetime.datetime(search_from[2],search_from[0],search_from[1]).strftime("%s"))
+
+    if search_to:
+        if date_format=="dd/mm/yyyy":
+            search_to.reverse()
+            search_to = int(datetime.datetime(*search_to).strftime("%s"))
+        else: # mm/dd/yyyy -> american style
+            search_to = int(datetime.datetime(search_to[2],search_to[0],search_to[1]).strftime("%s"))
+
+    try:
+        months_returned_from = int(months_returned_from)
+        months_returned_to = int(months_returned_to)
+        
+        if months_returned_from>12 or months_returned_to>12 or \
+            months_returned_from<0 or months_returned_to<0:
+            reply["log"] = "silly date given. <months_returned_from> or <months_returned_to> range from 1 to 12"
+            return reply_to_remote(jencode(reply))
+        
+    except:
+        reply["log"] = "silly date given for <months_returned_from> or <months_returned_to>"
+        return reply_to_remote(jencode(reply))
+
+    logfile = file_path("{}{}{}.search_invs.json".format(time.time(),months_returned_from,months_returned_to))
+
+    """
+    search_investments(const time_t search_from, const time_t search_to, 
+    const unsigned int months_returned_from, const unsigned int months_returned_to,
+    const String type, const String fout_name)
+    """
+    
+    if libghfu.search_investments(search_from, search_to, months_returned_from, months_returned_to,
+        investment_type, logfile):
+        results = jdecode(info(logfile))
+        reply["status"] = True
+        reply["results"] = results["results"]
+    else:
+        reply["log"] = info(logfile)
+    
+    rm(logfile)
+
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/search_services", methods=["POST"])
+def search_services():
+    """
+        if sucessfull, reply;
+        {
+            "status":True,
+            "log":"",
+            "results":{
+                "0":[str consumer-name, str service-name, int service-id, 
+                    float service-price, str last-payment-date, str next-payment-date],
+            }
+        }
+    
+    """
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    if json_req==None: json_req={}
+
+    consumer_name = str(json_req.get("consumer_name","all"))
+    service_name = str(json_req.get("service_name","all"))
+    date_format = str(json_req.get("date_format","dd/mm/yyyy"))
+    service_acquisition_date = str(json_req.get("acquisition_date",""))
+    
+    # the bools below are either True,False,"". "" represents <neutral> ie any of True/False.
+    # this modification is made in libghfu to handle scenarios where we dont care if a value is true or 
+    # false during the search...
+    service_paid = json_req.get("service_paid","")
+    service_active = json_req.get("service_is_active","")
+    security_month_paid = json_req.get("security_month_paid","")
+
+    if service_acquisition_date and (service_acquisition_date.count("/")!=2):
+        reply["log"] = "silly date given for <service_acquisition_date>"
+        return reply_to_remote(jencode(reply))
+
+    if service_acquisition_date:
+        try:
+            service_acquisition_date = [int(fig) for fig in service_acquisition_date.split("/")]
+        except:
+            reply["log"] = "silly date given for <service_acquisition_date>"
+            return reply_to_remote(jencode(reply))
+        if date_format=="dd/mm/yyyy":
+            service_acquisition_date.reverse()
+            service_acquisition_date = int(datetime.datetime(*service_acquisition_date).strftime("%s"))
+        else: # mm/dd/yyyy -> american style
+            service_acquisition_date = int(datetime.datetime(
+                service_acquisition_date[2],service_acquisition_date[0],service_acquisition_date[1]).strftime("%s"))
+
+    else: service_acquisition_date = 0
+    
+    service_paid = 1 if service_paid==True else (0 if service_paid==False else 2)
+    service_active = 1 if service_active==True else (0 if service_active==False else 2)
+    security_month_paid = 1 if security_month_paid==True else (0 if security_month_paid==False else 2)
+
+    """
+    search_services(const String consumer_name, const String service_name, 
+        const time_t service_acquisition_date, const bool service_paid, 
+        const bool service_active, const bool security_month_paid, const String fout_name)
+    """
+
+    logfile = file_path("{}{}.search_services.json".format(time.time(),consumer_name))
+
+    if libghfu.search_services(consumer_name,service_name,service_acquisition_date,
+        service_paid,service_active,security_month_paid,logfile):
+        results = jdecode(info(logfile))
+        reply["results"] = results
+        reply["status"] = True
+    else:
+        reply["log"] = info(logfile)
+    
+    rm(logfile)
+
+    return reply_to_remote(jencode(reply))
+
+
+@app.route("/update_service_status", methods=["POST"])
+def update_service_status():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+    
+    json_req = request.get_json()
+    
+    if not json_req:
+        reply["log"] = "expected json data..."
+        return reply_to_remote(jencode(reply))
+    
+    account_id = json_req.get("id",-1)
+    service_id = json_req.get("service_id",-1)
+    new_status = json_req.get("new_status",True)
+    
+    try:
+        account_id=int(account_id)
+        service_id= int(service_id)
+        
+        if account_id<0 or service_id<0:
+            reply["log"] = "silly data provided... <account_id> or <service_id>"
+            return reply_to_remote(jencode(reply))        
+    except:
+        reply["log"] = "silly data provided... <account_id> or <service_id>"
+        return reply_to_remote(jencode(reply))
+    
+    new_status = 1 if new_status else 0
+    
+    logfile = file_path("{}{}{}.service_status".format(account_id, service_id, new_status))
+
+    """
+    update_service_status(const ID account_id, const ID service_id, const bool new_status, 
+        const String fout_name)
+    """
+    
+    if libghfu.update_service_status(account_id, service_id,new_status, logfile):
+        reply["status"] = True
+        threading.Thread(target=libghfu.gsave, args=()).start()
+    else:
+        reply["log"] = info(logfile)
+    
+    rm(logfile)
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/create_new_service", methods=["POST"])
+def create_new_service():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+    
+    if not json:
+        reply["log"] = "expected json data in request..."
+        return reply_to_remote(jencode(reply))
+    
+    number = str(json_req.get("number",""))
+    account_id = json_req.get("id",-1)
+    service_id = json_req.get("service_id",-1)
+    service_name = str(json_req.get("service_name",""))
+    service_price = json_req.get("service_price",-1) # UGX NOT USD
+    deposit = json_req.get("deposit",0) # UGX NOT USD
+    
+    try:
+        account_id,service_id,deposit,service_price = int(account_id),int(service_id),int(deposit),int(service_price)
+        if account_id<0 or service_id<0 or deposit<0 or service_price<0:
+            reply["log"] = "silly data provided for <account_id>,<service_id>,<deposit>,<service_price>"
+            return reply_to_remote(jencode(reply))
+    except:
+        reply["log"] = "silly data provided for <account_id>,<service_id>,<deposit>,<service_price>"
+        return reply_to_remote(jencode(reply))
+        
+    if not number:
+        reply["log"] = "silly data provided; parameter <number>"
+        return reply_to_remote(jencode(reply))
+
+    logfile = file_path("{}{}{}.new_service".format(account_id,number,service_name,service_id))
+
+    """
+    register_new_service(ID account_id, const ID service_id, const String service_name, 
+        const Amount unit_price, const Amount amount, const bool test_feasibility, String fout_name)
+    """
+
+    # for services and property, the amount is in UGX and not UDS like investments and registration
+    fper = c_int.in_dll(libghfu, "FIXED_PROPERTY_EXCHANGE_RATE").value
+
+    if libghfu.register_new_service(account_id, service_id, service_name, c_float(service_price/float(fper)),c_float(deposit/float(fper)),1,logfile):
+        rm(logfile)
+        new_internal_code = get_random_code()
+        CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+        
+        threading.Thread(target=depost_funds_to_jpesa, 
+            args=(new_internal_code,number, deposit, 
+                libghfu.register_new_service,(account_id, service_id, service_name, c_float(service_price/float(fper)), c_float(deposit/float(fper)),0,logfile)),
+            kwargs={"logfile":logfile, "update_structure":True}).start()
+        
+        reply["status"] = True
+        reply["code"] = new_internal_code
+    else:
+        reply["log"] = info(logfile)
+        rm(logfile)
+
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/pay_for_service", methods=["POST"])
+def pay_for_services():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+
+    number = str(json_req.get("number",""))
+    account_id = json_req.get("id",-1)
+    service_id = json_req.get("service_id",-1)
+    deposit = json_req.get("deposit",0) # UGX NOT USD
+
+    try:
+        account_id,service_id,deposit = int(account_id),int(service_id),int(deposit)
+        if account_id<0 or service_id<0 or deposit<0:
+            reply["log"] = "silly data provided for <account_id>,<service_id>,<deposit>"
+            return reply_to_remote(jencode(reply))
+    except:
+        reply["log"] = "silly data provided for <account_id>,<service_id>,<deposit>"
+        return reply_to_remote(jencode(reply))
+        
+    if not number:
+        reply["log"] = "silly data provided; parameter <number>"
+        return reply_to_remote(jencode(reply))
+
+    logfile = file_path("{}{}{}.pay_service".format(account_id,number,service_id))
+
+
+    # for services and property, the amount is in UGX and not UDS like investments and registration
+    fper = c_int.in_dll(libghfu, "FIXED_PROPERTY_EXCHANGE_RATE").value
+
+    """
+    pay_for_consumer_service(ID account_id, const ID service_id, const Amount amount,
+        const bool test_feasibility, const String fout_name);
+    """
+
+    if libghfu.pay_for_consumer_service(account_id, service_id, c_float(deposit/float(fper)), 1, logfile):
+        rm(logfile)
+        new_internal_code = get_random_code()
+        CODES[new_internal_code] = {"status":False, "actionlog":"pending", "delete":False}
+        
+        threading.Thread(target=depost_funds_to_jpesa, 
+            args=(new_internal_code,number, deposit, 
+                libghfu.pay_for_consumer_service,(account_id, service_id, c_float(deposit/float(fper)),0,logfile)),
+            kwargs={"logfile":logfile, "update_structure":True}).start()
+        
+        reply["status"] = True
+        reply["code"] = new_internal_code
+    else:
+        reply["log"] = info(logfile)
+        rm(logfile)
+
+
+    return reply_to_remote(jencode(reply))
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it

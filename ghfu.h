@@ -28,6 +28,12 @@
         on my development machine (Dell-Inspiron-3542), the maximum number of threads a process could 
         dispatch is 30503 so my python server could handle a maximum of 30503 concurrent connections
         thus dispatching a maximum of 30503 threads to libjermGHFU.so
+
+        - For all functions dealing with money (register,invest,pay-service,etc), there is a bool 
+          argument <test_feasibility> used to first check(if set to true) if the function in question
+          will be sucessfull before you actually ask/give the client for the given fee. This has the 
+          benefit of not finding out that a function returned an error(eg uplink trying to be used to
+          join a new member is not in the system) after the client has paid!
 */
 
 /* library inclusion */

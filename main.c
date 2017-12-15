@@ -12,6 +12,7 @@ int main()
         exit(1);
 
     Account c1 = register_member(b1, "Consumer 1",0,false,stdout);
+    create_new_service(c1,23,"rent",110,110*3,true,stdout); // test feasibility...
     create_new_service(c1,23,"rent",110,110*3,false,stdout);
     pay_for_service(c1,23,110*9,false,stdout);
 

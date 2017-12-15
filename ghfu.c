@@ -210,7 +210,7 @@ bool increment_pv(Account account, const Amount points, FILE *fout)
 
     if(!account){ghfu_warn(7,fout); return false;}
 
-    time_t t; time(&t);
+    time_t t; t = time(NULL);
 
     pthread_mutex_lock(&glock);    
     account->pv += points;
@@ -301,12 +301,13 @@ bool award_commission(Account account, Amount points, String commission_type, St
     //printf("AC\n");
 
     if(!points){ghfu_warn(8,fout); return false;}
+    if(points<0) {ghfu_warn(36,fout); return false;}
     if(!account) {fprintf(fout,"could not award commissions for NULL account!\n"); return false;}
     
     Commission new_commission = malloc(sizeof(struct commission));
     if(!new_commission) memerror(fout);
 
-    time(&(new_commission->date));
+    new_commission->date = time(NULL);
 
     new_commission->reason = NULL;
     new_commission->amount = 0;
@@ -398,7 +399,7 @@ bool award_commission(Account account, Amount points, String commission_type, St
                 uplink->last_commission = malloc(sizeof(struct commission));
                 if(!(uplink->last_commission)) memerror(fout);
 
-                time(&(uplink->last_commission->date));
+                uplink->last_commission->date = time(NULL);
 
                 uplink->last_commission->reason = NULL;
                 uplink->last_commission->amount = p_comm;
@@ -518,7 +519,9 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
 
     //printf("I-Money\n");
 
-    time_t t; time(&t);
+    if(amount<0) {ghfu_warn(36,fout); return false;}
+
+    time_t t; t = time(NULL);
     struct tm *today = localtime(&t);
 
     if(today->tm_mday > LAST_INVESTMENT_DAY){ghfu_warn(19,fout); return false;}
@@ -603,7 +606,7 @@ bool invest_money(Account account, Amount amount, bool update_system_float, bool
     Amount points = amount*POINT_FACTOR;
         
     
-    time(&(new_investment->date));
+    new_investment->date = time(NULL);
 
     /* we dont know that package will point to after we exit here so we create space for it on the heap 
        i witnessed this issue when calling libjermGHFU.so->invest from python. see that the commission
@@ -706,6 +709,8 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     }
 
     //printf("Reg Member\n");
+
+    if(amount<0) {ghfu_warn(36,fout); return NULL;}
     
     bool is_consumer = amount ? false : true;
     if (is_consumer && (!HEAD->next)){ghfu_warn(26,fout); return NULL;}
@@ -777,7 +782,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
 
     new_account->pv_made_in_first_month = 0.0;
 
-    time(&(new_account->date));
+    new_account->date = time(NULL);
 
     if (test_feasibility) /* no more checks, operation is feasible*/
     {
@@ -909,6 +914,7 @@ bool buy_property(Account IB_account, Amount amount, bool test_feasibility, FILE
     //printf("buy-property\n");
 
     if(!amount){ghfu_warn(17,fout); return false;}
+    if(amount<0) {ghfu_warn(36,fout); return false;}
 
     if (test_feasibility) return true; /* no more checks, operation is feasible*/
 
@@ -988,9 +994,16 @@ bool auto_refill(Account account, FILE *fout)
         return false;
     }
 
+    for(unsigned int _c=0; MONTHLY_AUTO_REFILL_PERCENTAGES[_c][0]; ++_c)
+    {
+        if(MONTHLY_AUTO_REFILL_PERCENTAGES[_c][0]<0 || MONTHLY_AUTO_REFILL_PERCENTAGES[_c][1]<0) 
+            {ghfu_warn(36,fout); return false;}
+    }
+
+
     //printf("AR\n");
 
-    time_t t; time(&t);
+    time_t t; t = time(NULL);
     struct tm *today = localtime(&t);
 
     if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(12,fout); return false;}
@@ -1074,7 +1087,7 @@ bool auto_refill(Account account, FILE *fout)
                         new_commission = malloc(sizeof(struct commission));
                         if(!new_commission) memerror(fout);
 
-                        time(&(new_commission->date));
+                        new_commission->date = time(NULL);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1205,7 +1218,7 @@ bool auto_refill(Account account, FILE *fout)
                         new_commission = malloc(sizeof(struct commission));
                         if(!new_commission) memerror(fout);
 
-                        time(&(new_commission->date));
+                        new_commission->date = time(NULL);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1377,7 +1390,7 @@ bool calculate_tvc(Account account, FILE *fout)
 
     //printf("calculate TVC\n");
 
-    time_t t; time(&t);
+    time_t t; t = time(NULL);
     struct tm *today = localtime(&t);
 
     if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(15,fout); return false;}
@@ -1437,7 +1450,7 @@ bool calculate_tvc(Account account, FILE *fout)
                         new_commission = malloc(sizeof(struct commission));
                         if(!new_commission) memerror(fout);
 
-                        time(&(new_commission->date));
+                        new_commission->date = time(NULL);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1539,7 +1552,7 @@ bool calculate_tvc(Account account, FILE *fout)
                         new_commission = malloc(sizeof(struct commission));
                         if(!new_commission) memerror(fout);
 
-                        time(&(new_commission->date));
+                        new_commission->date = time(NULL);
 
                         new_commission->reason = NULL;
                         new_commission->amount = returns;
@@ -1600,7 +1613,7 @@ bool award_rank_monthly_bonuses(Account account, FILE *fout)
 
     //printf("award rank_monthly bonuses\n");
 
-    time_t t; time(&t);
+    time_t t; t = time(NULL);
     struct tm *today = localtime(&t);
 
     if(today->tm_mday!=PAYMENT_DAY){ghfu_warn(20,fout); return false;}
@@ -2463,6 +2476,7 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     if(!account) {ghfu_warn(11,fout); return false;}
     //if(account->id==1) {ghfu_warn(24,fout); return false;} // system accounts cant redeem
     if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
+    if(amount<0) {ghfu_warn(36,fout); return false;}
 
     if (test_feasibility) return true; /* no more checks, operation is feasible*/
 
@@ -2472,7 +2486,7 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     Withdraw new_withdraw = malloc(sizeof(struct withdraw));
     if(!new_withdraw) memerror(fout);
 
-    time(&(new_withdraw->date));
+    new_withdraw->date = time(NULL);
     new_withdraw->amount = amount;
 
     new_withdraw->next = NULL;
@@ -3550,7 +3564,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
                 memerror(stdout);
             }
 
-            time(&(new_commission->date));
+            new_commission->date = time(NULL);
             
             new_commission->amount = 0;
             new_commission->reason = NULL;
@@ -4240,6 +4254,17 @@ bool create_new_service(Account account, const ID service_id, const String servi
 
     if(!account) {ghfu_warn(28,fout); return false;}
 
+    if(unit_price<0 || amount<0) {ghfu_warn(36,fout); return false;}
+
+    if(account->services)
+    {
+        Service s = account->services;
+        while(s)
+        {
+            if(s->id==service_id) {ghfu_warn(35,fout); return false;}
+            s = s->next;
+        }
+    }
 
     Service new_service = malloc(sizeof(struct service));
     if(!new_service) memerror(fout);
@@ -4257,7 +4282,7 @@ bool create_new_service(Account account, const ID service_id, const String servi
     new_service->next = NULL;
     new_service->prev = NULL;
 
-    time(&(new_service->acquisition_date));
+    new_service->acquisition_date = time(NULL);
     set_service_aquisition_date(&(new_service->acquisition_date));
 
     pthread_mutex_lock(&glock);
@@ -4271,7 +4296,7 @@ bool create_new_service(Account account, const ID service_id, const String servi
     account->last_service = new_service;
     pthread_mutex_unlock(&glock);
 
-    if(!pay_for_service(account,service_id,amount,true,fout)) 
+    if(amount && !pay_for_service(account,service_id,amount,true,fout)) 
     {
         if(!(account->last_service->prev))
             {account->services=NULL; account->last_service=NULL;}
@@ -4282,7 +4307,16 @@ bool create_new_service(Account account, const ID service_id, const String servi
         return false;
     }
 
-    if(test_feasibility) { gfree(new_service); return true;}
+    if(test_feasibility) 
+    { 
+        if(!(account->last_service->prev))
+            {account->services=NULL; account->last_service=NULL;}
+        else
+            {account->last_service = account->last_service->prev; account->last_service->next=NULL;}
+        
+        gfree(new_service); 
+        return true;        
+    }
 
     unsigned int buff_length;
     String name_strings[] = {service_name, "\0"};
@@ -4292,7 +4326,8 @@ bool create_new_service(Account account, const ID service_id, const String servi
     if(!(new_service->name)) {gfree(new_service); memerror(fout);}
     join_strings(new_service->name,name_strings);
 
-    pay_for_service(account,service_id,amount,false,fout);
+    if(amount)
+        pay_for_service(account,service_id,amount,false,fout);
 
     return true;
 }
@@ -4322,6 +4357,7 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
 
     if(!account) {ghfu_warn(28,fout); return false;}
     if(!amount) {fprintf(fout,"PLEASE PROVIDE MONEY TO CLEAR THE SERVICE"); return false;}
+    if(amount<0) {ghfu_warn(36,fout); return false;}
     
     pthread_mutex_lock(&glock);
     Service service = account->services;
@@ -4354,7 +4390,7 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
     Payment new_payment = malloc(sizeof(struct payment));
     if(!new_payment) memerror(fout);
 
-    time(&(new_payment->date));
+    new_payment->date = time(NULL);
 
     new_payment->amount = amount;
 
@@ -4364,7 +4400,7 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
     char points_str[16];
     unsigned int buff_length;
 
-    if (new_payment->date<(payment_day+GHFU_DAY*7))
+    if (new_payment->date<(payment_day+(GHFU_DAY*7)))
         // qualifies to get the consumer-rebet
     {
         Amount comm = new_payment->date <= payment_day ?
@@ -4384,7 +4420,8 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
 
     pthread_mutex_lock(&glock);
 
-    if(!(service->payments)) service->payments = new_payment;
+    if(!(service->payments)) 
+        service->payments = new_payment;
     else
     {
         service->last_payment->next = new_payment;
@@ -4421,8 +4458,22 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
     SYSTEM_FLOAT += amount;
     pthread_mutex_unlock(&glock);
     
-
     return true;
+}
+
+bool pay_for_consumer_service(ID account_id, const ID service_id, const Amount amount,const bool test_feasibility, const String fout_name)
+{
+    bool status = false;
+    
+    FILE *fout = fopen(fout_name, "w");
+    if(!fout) return status;
+
+    Account account = get_account_by_id(account_id);    
+    status = pay_for_service(account, service_id, amount, test_feasibility,fout);
+    
+    fclose(fout);
+    return status;
+
 }
 
 bool change_service_status(Account account, ID service_id, bool new_status, FILE *fout)
@@ -4481,7 +4532,7 @@ bool search_services(const String consumer_name, const String service_name,
         security_month_paid: 1/0
         fout_name: file where json data will be dumped in format
             { "item-number":
-                [consumer-name,service-name,service-unit-price,last-payment-day,next-payment-day],
+                [consumer-name,service-name,service-id,service-unit-price,last-payment-day,next-payment-day],
                 ...
             }
 
@@ -4510,7 +4561,7 @@ bool search_services(const String consumer_name, const String service_name,
     
     unsigned long number_of_results = 1;
     
-    time_t today; time(&today);
+    time_t today; today = time(NULL);
     struct tm *lpd, *npd; // next and last payment-day
 
     while(ap)
@@ -4557,9 +4608,10 @@ bool search_services(const String consumer_name, const String service_name,
             started_writting = true;
 
             fprintf(fout,
-                "\"%ld\":[\"%s\",\"%s\",%.2f,",
+                "\"%ld\":[\"%s\",\"%s\",%ld,%.2f,",
                 number_of_results,
-                ((Account)(ap->account))->names, service->name, service->unit_price
+                ((Account)(ap->account))->names, service->name, service->id,
+                service->unit_price
             );
 
             if(!(service->payments))
