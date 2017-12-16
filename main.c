@@ -84,11 +84,12 @@ int main()
     structure_details(b1);
     structure_details(b2);
     structure_details(c1);
+    redeem_points(b1,5,0,stdout);
     dump_structure_details(b1->id, "test/test.json");
 
     gsave();
 
-    dump_structure_details(c1->id, "test/test.json");
+    //dump_structure_details(c1->id, "test/test.json");
 
     printf("\nsearched_investments? %d\n",search_investments(0,0,0,0,"all","test/invs"));
     printf("\nsearched_services? %d\n",search_services("all","all",0,2,2,2,"test/services"));

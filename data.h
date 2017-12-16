@@ -177,7 +177,7 @@ float INVESTMEN_SCHEME[][5] = {
 
 float FSB[][2] = { /* Fast-Start-Bonus */
     /* array-values are in format {PV+, %commission} */
-    {0, 5},
+    {0, 7},
     {70, 10},
     {120, 13},
     {170, 16},

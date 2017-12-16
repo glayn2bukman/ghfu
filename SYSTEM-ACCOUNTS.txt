@@ -1,0 +1,17 @@
+A1 {C1} -> A2 {C2} -> A3 {C3} -> A4 {C4} -> A5 {Sofia Mbabazi} -> ;
+    Rockteam {Nelson Pride Nsereko} ->
+        Rockteam1 {Nelson Pride Nsereko} ->
+            Dantx {Tom Gasana Bukenya}
+            Kferz {Richard Kato Sembatya}
+        Rockteam2 {Nelson Pride Nsereko} ->
+            James1 {Najjemba Jeromia}
+            KPC2018 {Andama Henry Kamya}
+        
+Rockteam - KPC2018, all diamond packs
+
+Total owed to system: $7,840
+Default password: ------
+
+* push dates backwards by over a month aand emulate one month of auto-refill (the auto-refill commissions
+  must reflect that payment-date)
+* only <<Rockteam*>> accounts can redeem funds

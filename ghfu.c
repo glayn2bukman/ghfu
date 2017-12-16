@@ -751,6 +751,7 @@ Account register_member(Account uplink, String names, Amount amount, bool test_f
     new_account->available_balance = 0;
     new_account->total_returns = 0;
     new_account->total_redeems = 0;
+    new_account->redeems = 0;
     
     new_account->uplink = is_consumer ? (Account)(HEAD->next->account) : uplink;
     new_account->children = NULL;
@@ -2415,23 +2416,27 @@ bool dump_structure_details(ID account_id, String fname)
         fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
             "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f,"
             "\"rank\":\"%s\",\"highest-leg-ranks\":[\"%s\",\"%s\",\"%s\"], \"COV\":%.2f"
-            ", \"creation-date\":\"%d/%d/%d\", \"first-month-pv\":%.2f",
+            ", \"creation-date\":\"%d/%d/%d\", \"first-month-pv\":%.2f"
+            ",\"number_of_withdraws\":%d",
             account->names, account->id, (!(account->uplink) ? "ROOT" : account->uplink->names),
             account->pv,account->total_returns,account->available_balance,account->total_redeems,
             RANKS[account->rank], RANKS[account->highest_leg_ranks[0]], RANKS[account->highest_leg_ranks[1]],
             RANKS[account->highest_leg_ranks[2]],
             account->pv+account->leg_volumes[0]+account->leg_volumes[1]+account->leg_volumes[2],
-            lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),account->pv_made_in_first_month
+            lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),account->pv_made_in_first_month,
+            account->redeems
         );
     }
     else
     {
         fprintf(fout, "\"names\":\"%s\",\"id\":%ld,\"uplink\":\"%s\","
             "\"pv\":%.2f,\"total_returns\":%.2f,\"available_balance\":%.2f,\"total_redeems\":%.2f,"
-            "\"creation-date\":\"%d/%d/%d\"",
+            "\"creation-date\":\"%d/%d/%d\""
+            ",\"number_of_withdraws\":%d",
             account->names, account->id, (!(account->uplink) ? "ROOT" : account->uplink->names),
             account->pv,account->total_returns,account->available_balance,account->total_redeems,            
-            lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900)
+            lt->tm_mday,(lt->tm_mon+1),(lt->tm_year+1900),
+            account->redeems
         );    
     }
     pthread_mutex_unlock(&glock);
@@ -2505,6 +2510,7 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     
     account->available_balance -= amount;
     account->total_redeems += amount;
+    ++(account->redeems);
     
     COMMISSIONS -= amount;
 
@@ -3072,12 +3078,12 @@ bool save_structure(String jermCrypt_path, String save_dir)
         fprintf(fout, 
                 /*section 1 (first-hand numeric attributes of the member + names)*/
             "%ld\x1%d\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%ld\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%.2f\x1%d\x1"
-            "%d\x1%d\x1%d\x1%ld\x1%.2f\x1%ld\x1%s",
+            "%d\x1%d\x1%d\x1%ld\x1%.2f\x1%d\x1%ld\x1%s",
             acc->id,acc->is_consumer,acc->pv,acc->available_balance,acc->total_returns,acc->total_redeems,
             (!(acc->uplink) ? 0 : acc->uplink->id), acc->leg_volumes[0], acc->leg_volumes[1],
             acc->leg_volumes[2],acc->TVC_levels[0],acc->TVC_levels[1], acc->rank,
             acc->highest_leg_ranks[0],acc->highest_leg_ranks[1],acc->highest_leg_ranks[2],
-            acc->date, acc->pv_made_in_first_month,
+            acc->date, acc->pv_made_in_first_month,acc->redeems,
             strlen(acc->names),acc->names
         );
 
@@ -3493,6 +3499,7 @@ bool load_structure(String jermCrypt_path, String save_dir)
             "%d\x1"
             "%ld\x1"
             "%f\x1"
+            "%d\x1"
             ,
             &(new_account->pv), &(new_account->available_balance), &(new_account->total_returns),
             &(new_account->total_redeems), &uplink_id, new_account->leg_volumes,
@@ -3500,7 +3507,8 @@ bool load_structure(String jermCrypt_path, String save_dir)
             new_account->TVC_levels, &(new_account->TVC_levels[1]), &(new_account->rank),
             new_account->highest_leg_ranks, &(new_account->highest_leg_ranks[1]),
             &(new_account->highest_leg_ranks[2]),
-            &(new_account->date), &(new_account->pv_made_in_first_month)
+            &(new_account->date), &(new_account->pv_made_in_first_month),
+            &(new_account->redeems)
         );
         
         pthread_mutex_unlock(&glock);
@@ -4400,7 +4408,7 @@ bool pay_for_service(Account account,const ID service_id, const Amount amount,co
     char points_str[16];
     unsigned int buff_length;
 
-    if (new_payment->date<(payment_day+(GHFU_DAY*7)))
+    if (new_payment->date<(payment_day+(GHFU_DAY*10)))
         // qualifies to get the consumer-rebet
     {
         Amount comm = new_payment->date <= payment_day ?

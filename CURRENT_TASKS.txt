@@ -9,3 +9,9 @@
 - function to show/search all serives whose payment day is near (a week)
 - function to show/search all serives whose payment day is past (a week+)
 - function to show/search what services haven't been cleared for the security month
+
+- add feature of <number_of_withdraws> for structure. martin needs it
+  * update <Account>
+  * update <save/load structure>
+  * update <redeem_points> to increment the value
+  * update <dump_structure_details> to add {"number_of_withdraws"} to dumped json

@@ -150,6 +150,7 @@ typedef struct account
     Amount available_balance;
     Amount total_returns;
     Amount total_redeems;
+    unsigned int redeems; // number of redeems made
 
     struct account *uplink;
     AccountPointer children;
