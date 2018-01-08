@@ -169,18 +169,18 @@ float INVESTMEN_SCHEME[][5] = {
     /* array-values are in format {points+, %lowest, %highest, %min-profit-returns, %max-profit-returns} 
        the data is in descending investment-points order
     */
-    {175, 40, 90, 15, 30},
-    {125, 40, 95, 15, 30},
-    {75, 40, 100, 15, 30},
+    {175, 40, 80, -5, 30},
+    {125, 40, 85, -5, 30},
+    {75, 40, 95, -5, 30},
     {0, 0, 0, 0, 0} /* terminating condition */
 };
 
 float FSB[][2] = { /* Fast-Start-Bonus */
     /* array-values are in format {PV+, %commission} */
     {0, 7},
-    {70, 10},
-    {120, 13},
-    {170, 16},
+    {70, 30},
+    {120, 30},
+    {170, 30},
     {0, 0} /* terminating condition */
 };
 

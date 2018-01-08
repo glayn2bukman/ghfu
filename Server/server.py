@@ -1389,7 +1389,7 @@ def email():
         reply["log"] = "please provide a subject and message for the email"
         return reply_to_remote(jencode(reply))
     
-    reply["email"] = "email"
+    reply["email"] = email
         
     if send_code:
         temp_code = get_random_code()
@@ -1397,7 +1397,17 @@ def email():
         reply["code"] = temp_code
 
         threading.Thread(target=send_mail.send_mail, args=("GHFU RECOVERY PASSWORD",[],[email],
-            "your GHFU temporary password is {}. use this password login to GHFU".format(temp_code))).start()
+"""
+Greetings,
+
+Your new password is: {}
+
+Please use your username : your_email and the new password to login into your account
+
+You can change your password after you login into your account using the change password link.
+
+Thank you for choosing GHFU.
+""".format(temp_code))).start()
     
     else:
         reply["status"] = True
