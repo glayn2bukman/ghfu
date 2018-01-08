@@ -1,4 +1,4 @@
-A1 {C1} -> A2 {C2} -> A3 {C3} -> A4 {C4} -> A5 {Sofia Mbabazi} -> ;
+A1 {A1} -> A2 {A2} -> A3 {A3} -> A4 {A4} -> A5 {Sofia Mbabazi} -> ;
     Rockteam {Nelson Pride Nsereko} ->
         Rockteam1 {Nelson Pride Nsereko} ->
             Dantx {Tom Gasana Bukenya}

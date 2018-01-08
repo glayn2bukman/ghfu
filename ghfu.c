@@ -2479,7 +2479,7 @@ bool redeem_points(Account account, Amount amount, bool test_feasibility, FILE *
     //printf("redeem-points\n");
 
     if(!account) {ghfu_warn(11,fout); return false;}
-    //if(account->id==1) {ghfu_warn(24,fout); return false;} // system accounts cant redeem
+    if(account->id<=5) {ghfu_warn(24,fout); return false;} // system accounts cant redeem
     if(amount>(account->available_balance)){ghfu_warn(10,fout); return false;}
     if(amount<0) {ghfu_warn(36,fout); return false;}
 
@@ -4630,7 +4630,7 @@ bool search_services(const String consumer_name, const String service_name,
                 npd = localtime(&(service->last_payment->next_payment_date));
 
                 fprintf(fout,"\"%d/%d/%d\",\"%d/%d/%d\"]",
-                    lpd->tm_mday,(lpd->tm_mon+1),(lpd->tm_year+1900),
+                    //lpd->tm_mday,(lpd->tm_mon+1),(lpd->tm_year+1900),
                     npd->tm_mday,(npd->tm_mon+1),(npd->tm_year+1900)
                 );
             }

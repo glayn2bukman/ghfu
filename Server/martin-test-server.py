@@ -42,6 +42,7 @@
 from flask import Flask, request, Response
 import os, sys, json, threading, time, random
 import requests
+import send_mail
 
 path = os.path.realpath(__file__)
 path = os.path.split(os.path.split(path)[0])[0]
@@ -1001,6 +1002,82 @@ def transfer_funds_from_jpesa_to_mobile_money():
 
     return reply_to_remote(jencode(reply))
 
+@app.route("/get_registration_code", methods=["POST"])
+def get_register_code():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+
+    reply = {"status":False, "log":""}
+
+    json_req = request.get_json()
+
+    if not json_req:
+        reply["log"] = "expected json data in request"
+        return reply_to_remote(jencode(reply))
+    
+    email = str(json_req.get("email",""))
+    
+    if (not email) or (not ("@" in email)):
+        reply["log"] = "invalid email provided"
+
+    temp_code = get_random_code()
+
+    reply["status"] = True
+    reply["email"] = email
+    reply["code"] = temp_code
+    
+    threading.Thread(target=send_mail.send_mail, args=("GHFU CODE",[],[email],
+        """
+Greetings,
+
+Thanks for registering with GHFU.
+
+Your Code is: {}
+
+Visit the app, use your email as the username and the code given above as the password to login
+
+Thank you        """.format(temp_code))).start()
+    
+    return reply_to_remote(jencode(reply))
+
+@app.route("/email", methods=["POST"])
+def email():
+    if not client_known(request.access_route[-1]): 
+        return reply_to_remote("You are not authorised to access this server!"),401
+    
+    reply = {"status": False, "log":""}
+
+    json_req = request.get_json()
+
+    email = json_req.get("email","")
+    subject = json_req.get("subject","")
+    message = json_req.get("message","")
+    send_code = json_req.get("send_code",False)
+
+    if not email:
+        reply["log"] = "please provide the target email address"
+        return reply_to_remote(jencode(reply))
+
+    if (not send_code) and ((not subject) or (not message)): # idiot forgot their email...
+        reply["log"] = "please provide a subject and message for the email"
+        return reply_to_remote(jencode(reply))
+    
+    reply["email"] = "email"
+        
+    if send_code:
+        temp_code = get_random_code()
+        reply["status"] = True
+        reply["code"] = temp_code
+
+        threading.Thread(target=send_mail.send_mail, args=("GHFU RECOVERY PASSWORD",[],[email],
+            "your GHFU temporary password is {}. use this password login to GHFU".format(temp_code))).start()
+    
+    else:
+        reply["status"] = True
+        threading.Thread(target=send_mail.send_mail, args=(subject,[],[email],message)).start()
+
+
+    return reply_to_remote(jencode(reply))
 
 if __name__=="__main__":
     # ==ALWAYS== INITIATE libghfu before you use it
